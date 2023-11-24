@@ -1,0 +1,105 @@
+name: Build openRBRVR
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+      with:
+        submodules: recursive
+
+    - name: Set up MSVC
+      uses: microsoft/setup-msbuild@v1.0.2
+
+    - name: Download DirectX Headers
+      run: |
+        $url = 'https://github.com/apitrace/dxsdk/archive/refs/heads/master.zip'
+        $headersPath = 'dxsdk-master/Include'
+        Invoke-WebRequest -Uri $url -OutFile 'dx.zip'
+        Expand-Archive -Path 'dx.zip' -DestinationPath '.'
+        Move-Item -Path $headersPath -Destination 'C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\Include'
+
+    - name: Add CMake to PATH
+      run: |
+        $env:PATH += ";C:\Program Files\CMake\bin"
+
+    - name: Configure CMake
+      run: cmake -S . -B build -A Win32 -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build
+      run: cmake --build build --config Release
+
+    - name: Upload openRBRVR.dll
+      uses: actions/upload-artifact@v2
+      with:
+        name: openRBRVR.dll
+        path: build\Release\openRBRVR.dll
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Fetch tags
+      run: git fetch --depth=1 origin +refs/tags/*:refs/tags/*
+
+    - name: Download Build Artifact
+      uses: actions/download-artifact@v2
+      with:
+        name: openRBRVR.dll
+
+    - name: Create changelog
+      id: changelog
+      run: |
+        changes=$(awk -v tag=$(git tag --sort=-creatordate | sed -n '2p') '$0 ~ "## " tag {exit} {print}' CHANGELOG.md | sed -e '1,2d')
+        echo "CHANGELOG<<EOF" >> $GITHUB_ENV
+        while IFS= read -r line; do
+          echo $line >> $GITHUB_ENV
+        done <<< "$changes"
+        echo EOF >> $GITHUB_ENV
+
+    - name: Create release zip
+      id: release-zip
+      run: |
+        mkdir -p openRBRVR-${{ github.ref_name }}/Plugins/openRBRVR
+        cp thirdparty/dll/* openRBRVR-${{ github.ref_name }}
+        cp openRBRVR.dll openRBRVR.toml.sample openRBRVR-${{ github.ref_name }}/Plugins
+        cp LICENSE openRBRVR-${{ github.ref_name }}/Plugins/openRBRVR
+        cp README.md openRBRVR-${{ github.ref_name }}/Plugins/openRBRVR/README.openrbrvr.txt
+        cp README_FR.md openRBRVR-${{ github.ref_name }}/Plugins/openRBRVR/README_FR.openrbrvr.txt
+        cp README_CZ.md openRBRVR-${{ github.ref_name }}/Plugins/openRBRVR/README_CZ.openrbrvr.txt
+        zip -r openRBRVR-${{ github.ref_name }}.zip openRBRVR-${{ github.ref_name }}
+
+    - name: Create GitHub release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name }}
+        release_name: ${{ github.ref_name }}
+        draft: false
+        prerelease: false
+        body: ${{ env.CHANGELOG }}
+
+    - name: Upload release asset
+      id: upload-release-asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_name: openRBRVR-${{ github.ref_name }}.zip
+        asset_path: openRBRVR-${{ github.ref_name }}.zip
+        asset_content_type: application/zip
+
