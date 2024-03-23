@@ -1,5 +1,5 @@
-#define VERSION @openRBRVR_Major@,@openRBRVR_Minor@,@openRBRVR_Patch@,@openRBRVR_Tweak@
-#define VERSION_STR "@openRBRVR_Major@.@openRBRVR_Minor@.@openRBRVR_Patch@@openRBRVR_TweakStr@\0"
+#define VERSION @openRBRTriples_Major@,@openRBRTriples_Minor@,@openRBRTriples_Patch@,@openRBRTriples_Tweak@
+#define VERSION_STR "@openRBRTriples_Major@.@openRBRTriples_Minor@.@openRBRTriples_Patch@@openRBRTriples_TweakStr@\0"
 
 #include <windows.h>
 
@@ -16,10 +16,10 @@ BEGIN
     BEGIN
         BLOCK "040904E4"
         BEGIN
-            VALUE "FileDescription", "Open source VR implementation for RBR"
+            VALUE "FileDescription", "True triple screen implementation for RBR"
             VALUE "LegalCopyright",   "Antti Keranen - Licensed under MPL-2.0"
-            VALUE "OriginalFilename", "openRBRVR.dll"
-            VALUE "ProductName",      "openRBRVR"
+            VALUE "OriginalFilename", "openRBRTriples.dll"
+            VALUE "ProductName",      "openRBRTriples"
             VALUE "FileVersion",      VERSION_STR
             VALUE "ProductVersion",   VERSION_STR
         END

@@ -3,20 +3,16 @@
 // Default initialization for global variables
 
 namespace g {
-    IPlugin* openrbrvr;
+    IPlugin* openrbrtriples;
     IRBRGame* game;
-    VRInterface* vr;
+    HWND main_window;
     Config cfg;
     Config saved_cfg;
     bool draw_overlay_border;
     IDirect3DDevice9* d3d_dev;
-    IDirect3DVR9* d3d_vr;
     std::vector<IDirect3DVertexShader9*> base_game_shaders;
     std::unordered_map<std::string, IDirect3DTexture9*> car_textures;
-    std::optional<RenderTarget> vr_render_target;
-    bool vr_error;
-    std::chrono::steady_clock::time_point frame_start;
-    std::optional<RenderTarget> current_2d_render_target;
+    std::optional<RenderTarget> current_render_target;
     IDirect3DSurface9* original_render_target;
     IDirect3DSurface9* original_depth_stencil_target;
     uint8_t* btb_track_status_ptr;
@@ -34,9 +30,6 @@ namespace g {
         Hook<decltype(IDirect3DDevice9Vtbl::DrawPrimitive)> draw_primitive;
 
         // RBR functions
-        Hook<decltype(&rbr::load_texture)> load_texture;
         Hook<decltype(&rbr::render)> render;
-        Hook<decltype(&rbr::render_car)> render_car;
-        Hook<decltype(&rbr::render_particles)> render_particles;
     }
 }

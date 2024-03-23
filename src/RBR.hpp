@@ -1,6 +1,6 @@
 #pragma once
 
-#include "VR.hpp"
+#include "Util.hpp"
 
 #include <cstdint>
 #include <d3d9.h>
@@ -21,25 +21,17 @@ namespace rbr {
     };
 
     uintptr_t get_render_function_addr();
-    uintptr_t get_render_particles_function_addr();
     GameMode get_game_mode();
     bool is_on_btb_stage();
     bool is_loading_btb_stage();
     bool is_rendering_3d();
     bool is_using_cockpit_camera();
     uint32_t get_current_stage_id();
-    bool is_car_texture(IDirect3DBaseTexture9* tex);
-    bool is_rendering_car();
-    bool is_rendering_particles();
 
     void change_camera(void* p, uint32_t cameraType);
-    M4 get_horizon_lock_matrix();
 
     // Hookable functions
     void __fastcall render(void* p);
-    uint32_t __stdcall load_texture(void* p, const char* texName, uint32_t a, uint32_t b, uint32_t c, uint32_t d, uint32_t e, uint32_t f, uint32_t g, uint32_t h, uint32_t i, uint32_t j, uint32_t k, IDirect3DTexture9** ppTexture);
-    void __stdcall render_car(void* a, void* b);
-    void __fastcall render_particles(void* This);
 }
 
 namespace rbr_rx {

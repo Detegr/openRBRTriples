@@ -4,12 +4,12 @@
 #include <cstdint>
 #include <ranges>
 
-class openRBRVR : public IPlugin {
+class openRBRTriples : public IPlugin {
     IRBRGame* game;
 
 public:
-    openRBRVR(IRBRGame* g);
-    virtual ~openRBRVR(void);
+    openRBRTriples(IRBRGame* g);
+    virtual ~openRBRTriples(void);
     virtual const char* GetName(void) { return "openRBRVR"; }
     virtual void DrawFrontEndPage(void);
     virtual void DrawResultsUI(void) {};

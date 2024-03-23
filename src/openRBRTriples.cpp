@@ -13,17 +13,14 @@
 #include "Hook.hpp"
 #include "Licenses.hpp"
 #include "Menu.hpp"
-#include "OpenVR.hpp"
-#include "OpenXR.hpp"
 #include "Quaternion.hpp"
 #include "RBR.hpp"
 #include "Util.hpp"
-#include "VR.hpp"
 #include "Version.hpp"
 #include "Vertex.hpp"
-#include "openRBRVR.hpp"
+#include "openRBRTriples.hpp"
 
-openRBRVR::openRBRVR(IRBRGame* g)
+openRBRTriples::openRBRTriples(IRBRGame* g)
     : game(g)
 {
     g::game = g;
@@ -43,24 +40,17 @@ openRBRVR::openRBRVR(IRBRGame* g)
     try {
         g::hooks::create = Hook(d3dcreate, dx::Direct3DCreate9);
         g::hooks::render = Hook(*reinterpret_cast<decltype(rbr::render)*>(rbr::get_render_function_addr()), rbr::render);
-        g::hooks::render_particles = Hook(*reinterpret_cast<decltype(rbr::render_particles)*>(rbr::get_render_particles_function_addr()), rbr::render_particles);
     } catch (const std::runtime_error& e) {
         dbg(e.what());
         MessageBoxA(nullptr, e.what(), "Hooking failed", MB_OK);
     }
-    g::cfg = g::saved_cfg = Config::fromPath("Plugins");
-    g::draw_overlay_border = (g::cfg.debug && g::cfg.debug_mode == 0);
 }
 
-openRBRVR::~openRBRVR()
+openRBRTriples::~openRBRTriples()
 {
-    if (g::vr) {
-        g::vr->shutdown_vr();
-        delete g::vr;
-    }
 }
 
-void openRBRVR::HandleFrontEndEvents(char txtKeyboard, bool bUp, bool bDown, bool bLeft, bool bRight, bool bSelect)
+void openRBRTriples::HandleFrontEndEvents(char txtKeyboard, bool bUp, bool bDown, bool bLeft, bool bRight, bool bSelect)
 {
     if (bSelect) {
         g::menu->select();
@@ -79,7 +69,7 @@ void openRBRVR::HandleFrontEndEvents(char txtKeyboard, bool bUp, bool bDown, boo
     }
 }
 
-void openRBRVR::DrawMenuEntries(const std::ranges::forward_range auto& entries, float rowHeight)
+void openRBRTriples::DrawMenuEntries(const std::ranges::forward_range auto& entries, float rowHeight)
 {
     auto x = 0.0f;
     auto y = 0.0f;
@@ -107,10 +97,10 @@ void openRBRVR::DrawMenuEntries(const std::ranges::forward_range auto& entries, 
     }
     game->SetFont(IRBRGame::EFonts::FONT_SMALL);
     game->SetColor(0.7f, 0.7f, 0.7f, 1.0f);
-    game->WriteText(10.0f, 458.0f, std::format("openRBRVR {} - https://github.com/Detegr/openRBRVR", VERSION_STR).c_str());
+    game->WriteText(10.0f, 458.0f, std::format("openRBRTriples {} - https://github.com/Detegr/openRBRVR", VERSION_STR).c_str());
 }
 
-void openRBRVR::DrawFrontEndPage()
+void openRBRTriples::DrawFrontEndPage()
 {
     constexpr auto menuItemsStartHeight = 70.0f;
     const auto idx = g::menu->index();

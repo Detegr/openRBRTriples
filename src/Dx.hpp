@@ -1,11 +1,10 @@
 #pragma once
 
-#include "VR.hpp"
-
+#include "RenderTarget.hpp"
 #include <d3d9.h>
 
 namespace dx {
-    void render_vr_eye(void* p, RenderTarget eye, bool clear = true);
+    void set_render_target(RenderTarget tgt, bool clear = true);
 
     // Hooked functions
     HRESULT __stdcall CreateVertexShader(IDirect3DDevice9* This, const DWORD* pFunction, IDirect3DVertexShader9** ppShader);
