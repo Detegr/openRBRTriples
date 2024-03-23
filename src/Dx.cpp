@@ -11,7 +11,6 @@
 namespace g {
     static std::vector<IDirect3DSwapChain9*> swapchains;
     static std::vector<std::tuple<IDirect3DSurface9*, IDirect3DSurface9*>> surfaces;
-    static M4 projection_matrix;
 }
 
 namespace dx {
@@ -117,6 +116,7 @@ namespace dx {
         float angle = 0.0;
         if (rbr::is_rendering_3d()) {
             angle = static_cast<float>(g::cfg.cameras[g::current_render_target.value()].angle);
+            angle += glm::radians(g::cfg.cameras[g::current_render_target.value()].angle_adjustment);
             if (g::current_render_target.value() == RenderTarget::Right) {
                 angle = -angle;
             }
@@ -333,12 +333,6 @@ namespace dx {
                 MessageBoxA(hFocusWindow, e.what(), "Hooking failed", MB_OK);
             }
         }
-
-        g::projection_matrix = glm::perspectiveFovLH(
-            static_cast<float>(g::cfg.fov),
-            static_cast<float>(g::cfg.cameras[0].w()),
-            static_cast<float>(g::cfg.cameras[0].h()),
-            0.15f, 10000.0f);
 
         return ret;
     }

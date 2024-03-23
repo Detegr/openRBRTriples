@@ -60,6 +60,9 @@ namespace g {
     // Pointer to BTB track status information. Non-zero if a BTB stage is loaded.
     extern uint8_t* btb_track_status_ptr;
 
+    // Custom projection matrix used by the plugin
+    extern M4 projection_matrix;
+
     // Hooks to DirectX and RBR functions
     namespace hooks {
         // DirectX functions

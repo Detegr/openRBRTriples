@@ -28,6 +28,7 @@ namespace rbr {
     bool is_using_cockpit_camera();
     uint32_t get_current_stage_id();
 
+    void update_current_camera_fov(uintptr_t p);
     void change_camera(void* p, uint32_t cameraType);
 
     // Hookable functions

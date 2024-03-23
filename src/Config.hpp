@@ -25,6 +25,7 @@ struct CameraConfig {
     glm::ivec2 crop;
     glm::vec3 translation;
     double angle;
+    double angle_adjustment;
 
     auto operator<=>(const CameraConfig&) const = default;
 
@@ -67,7 +68,7 @@ struct Config {
                 { "cropy", cam.crop.y },
                 { "translatex", cam.translation.x },
                 { "translatey", cam.translation.y },
-                { "angle", cam.angle } });
+                { "angle", cam.angle_adjustment } });
         }
         toml::table out {
             { "fov", fov },
@@ -108,7 +109,7 @@ struct Config {
         }
 
         double aspect = static_cast<double>(defaultExtent[2]) / static_cast<double>(defaultExtent[3]);
-        auto fov = parsed["fov"].value_or(1.0) / (4.0 / 3.0);
+        const auto fov = 1.0472; // 60 degrees // parsed["fov"].value_or(1.0) / (4.0 / 3.0);
         auto cameras = parsed["camera"];
         if (cameras.is_array_of_tables()) {
             cameras.as_array()->for_each([fov, aspect, &cfg](toml::table& tbl) {
@@ -127,7 +128,8 @@ struct Config {
                     extent,
                     crop,
                     translation,
-                    tbl["angle"].value_or(primary ? 0.0 : 2.0 * std::atan(std::tan(fov / 2.0) * aspect)),
+                    0.0,
+                    tbl["angle"].value_or(0.0),
                 };
 
                 if (primary) {

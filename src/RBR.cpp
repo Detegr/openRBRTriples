@@ -40,9 +40,11 @@ namespace rbr {
 
     using ChangeCameraFn = void(__thiscall*)(void* p, int cameraType, uint32_t a);
     using PrepareCameraFn = void(__thiscall*)(void* This, uint32_t a);
+    using PostPrepareCameraFn = void(__thiscall*)(void* This, uint32_t a);
     static ChangeCameraFn change_camera_fn = reinterpret_cast<ChangeCameraFn>(get_address(0x487680));
     static PrepareCameraFn apply_camera_position = reinterpret_cast<PrepareCameraFn>(get_address(0x4825B0));
     static PrepareCameraFn apply_camera_fov = reinterpret_cast<PrepareCameraFn>(get_address(0x4BF690));
+    static PostPrepareCameraFn post_prepare_camera = reinterpret_cast<PostPrepareCameraFn>(get_address(0x487320));
 
     uintptr_t get_render_function_addr()
     {
@@ -84,6 +86,73 @@ namespace rbr {
         return g::current_stage_id;
     }
 
+    static uintptr_t get_camera_info_ptr()
+    {
+        uintptr_t cameraData = *reinterpret_cast<uintptr_t*>(*reinterpret_cast<uintptr_t*>(CAR_INFO_ADDR) + 0x758);
+        return *reinterpret_cast<uintptr_t*>(cameraData + 0x10);
+    }
+
+    // Read camera FoV from the currently selected RBR camera
+    // and recreate the projection matrix with the correct FoV
+    void update_current_camera_fov(uintptr_t p)
+    {
+        float* original_fov_ptr;
+        float* current_fov_ptr = reinterpret_cast<float*>(p + 0x70 + 0x2c0);
+
+        // The 3 cameras (bumper, bonnet, internal) whose FoV can be set via Pacenote plugin
+        // The FoV is read from these values by the game, and written into `current_fov_ptr` in memory
+        switch (*g::camera_type_ptr) {
+            case 3:
+                original_fov_ptr = reinterpret_cast<float*>(get_camera_info_ptr() + 0x348);
+                break;
+
+            case 4:
+                original_fov_ptr = reinterpret_cast<float*>(get_camera_info_ptr() + 0x380);
+                break;
+
+            case 5:
+                original_fov_ptr = reinterpret_cast<float*>(get_camera_info_ptr() + 0x3b8);
+                break;
+
+            default:
+                original_fov_ptr = current_fov_ptr;
+        }
+
+        if (*original_fov_ptr == 0.0) {
+            return;
+        }
+
+        // This has to be done to make the FoV value correct for glm::perspectiveFovLH
+        // It is always 4/3 even if the current resolution has a different aspect ratio
+        float original_fov = *original_fov_ptr / (4.0 / 3.0);
+        float fov = glm::radians(original_fov);
+
+        // Use the set FoV as the FoV for rendering the game
+        g::projection_matrix = glm::perspectiveFovLH(
+            fov,
+            static_cast<float>(g::cfg.cameras[0].w()),
+            static_cast<float>(g::cfg.cameras[0].h()),
+            0.10f, 10000.0f);
+
+        // Re-calculate the correct angle for the new FoV for the side views
+        for (int i = 1; i < g::cfg.cameras.size(); ++i) {
+            const auto aspect = static_cast<double>(g::cfg.cameras[0].w()) / static_cast<double>(g::cfg.cameras[0].h());
+            g::cfg.cameras[i].angle = 2.0 * std::atan(std::tan(fov / 2.0) * aspect);
+        }
+
+        // Apply 3x times the normal FoV for rendering in order to prevent objects from disappearing
+        // from the peripheral view. As we're using a separate projection matrix, this has no effect
+        // on the actual projection, just for the RBR rendering optimization logic that starts culling
+        // objects that are not visible.
+        const auto camera_post_prepare_this = reinterpret_cast<void*>(p + 0x70);
+        const auto camera_fov_this = *reinterpret_cast<void**>(p + 0xcf4);
+
+        *current_fov_ptr = original_fov * 3.0;
+        post_prepare_camera(camera_post_prepare_this, 0);
+        apply_camera_fov(camera_fov_this, 0);
+        *current_fov_ptr = *original_fov_ptr;
+    }
+
     static bool init_or_update_game_data(uintptr_t ptr)
     {
         static bool window_position_set = false;
@@ -105,14 +174,14 @@ namespace rbr {
         }
 
         if (!g::camera_type_ptr) [[unlikely]] {
-            uintptr_t cameraData = *reinterpret_cast<uintptr_t*>(*reinterpret_cast<uintptr_t*>(CAR_INFO_ADDR) + 0x758);
-            uintptr_t cameraInfo = *reinterpret_cast<uintptr_t*>(cameraData + 0x10);
-            g::camera_type_ptr = reinterpret_cast<uint32_t*>(cameraInfo);
+            g::camera_type_ptr = reinterpret_cast<uint32_t*>(get_camera_info_ptr());
         }
 
         if (!g::stage_id_ptr) [[unlikely]] {
             g::stage_id_ptr = reinterpret_cast<uint32_t*>(*reinterpret_cast<uintptr_t*>(*GAME_MODE_EXT_2_PTR + 0x70) + 0x20);
         }
+
+        update_current_camera_fov(ptr);
 
         return *reinterpret_cast<uint32_t*>(ptr + 0x720) == 0;
     }
@@ -149,6 +218,7 @@ namespace rbr {
 
         static bool flipflop;
         int i = 0;
+
         for (const auto& c : g::cfg.cameras) {
             if (!flipflop && i == RenderTarget::Left) {
                 i++;
