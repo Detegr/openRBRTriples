@@ -26,6 +26,7 @@ struct CameraConfig {
     glm::vec3 translation;
     double angle;
     double angle_adjustment;
+    double fov;
 
     auto operator<=>(const CameraConfig&) const = default;
 
@@ -38,17 +39,19 @@ struct CameraConfig {
 struct Config {
     std::vector<CameraConfig> cameras;
     double fov;
+    bool side_monitors_half_hz;
 
     Config& operator=(const Config& rhs)
     {
         cameras = rhs.cameras;
         fov = rhs.fov;
+        side_monitors_half_hz = rhs.side_monitors_half_hz;
         return *this;
     }
 
     bool operator==(const Config& rhs) const
     {
-        return cameras == rhs.cameras && fov == rhs.fov;
+        return cameras == rhs.cameras && fov == rhs.fov && side_monitors_half_hz == rhs.side_monitors_half_hz;
     }
 
     bool write(const std::filesystem::path& path) const
@@ -71,7 +74,7 @@ struct Config {
                 { "angle", cam.angle_adjustment } });
         }
         toml::table out {
-            { "fov", fov },
+            { "side_monitors_half_hz", side_monitors_half_hz },
             { "camera", toml::array { cams } },
         };
 
@@ -90,7 +93,7 @@ struct Config {
                 defaultExtent,
                 { 0, 0 },
                 { 0, 0, 0 },
-                0 });
+                0, 0 });
             if (!cfg.write(path)) {
                 MessageBoxA(nullptr, "Could not write openRBRTriples.toml", "Error", MB_OK);
             }
@@ -130,6 +133,7 @@ struct Config {
                     translation,
                     0.0,
                     tbl["angle"].value_or(0.0),
+                    tbl["fov"].value_or(0.0),
                 };
 
                 if (primary) {
@@ -140,12 +144,14 @@ struct Config {
             });
         }
 
+        cfg.side_monitors_half_hz = parsed["side_monitors_half_hz"].value_or(true);
+
         if (cfg.cameras.empty()) {
             cfg.cameras.emplace_back(CameraConfig {
                 defaultExtent,
                 { 0, 0 },
                 { 0, 0, 0 },
-                0 });
+                0, 0 });
         }
 
         cfg.fov = fov;

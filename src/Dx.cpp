@@ -116,7 +116,7 @@ namespace dx {
         float angle = 0.0;
         if (rbr::is_rendering_3d()) {
             angle = static_cast<float>(g::cfg.cameras[g::current_render_target.value()].angle);
-            angle += glm::radians(g::cfg.cameras[g::current_render_target.value()].angle_adjustment);
+            angle += static_cast<float>(glm::radians(g::cfg.cameras[g::current_render_target.value()].angle_adjustment));
             if (g::current_render_target.value() == RenderTarget::Right) {
                 angle = -angle;
             }
@@ -148,12 +148,11 @@ namespace dx {
         if (shader)
             shader->Release();
 
-        // TODO:
         if (is_base_shader && Vector4fCount == 4) {
             if (StartRegister == 0) {
                 const auto orig = glm::transpose(m4_from_shader_constant_ptr(pConstantData));
                 const auto mv = shader::current_projection_matrix_inverse * orig;
-                const auto mvp = glm::transpose(g::projection_matrix * get_translation_matrix() * get_rotation_matrix() * mv);
+                const auto mvp = glm::transpose(g::projection_matrix[g::current_render_target.value_or(RenderTarget::Primary)] * get_translation_matrix() * get_rotation_matrix() * mv);
                 return g::hooks::set_vertex_shader_constant_f.call(g::d3d_dev, StartRegister, glm::value_ptr(mvp), Vector4fCount);
             } else if (StartRegister == 20) {
                 // Sky/fog
@@ -170,7 +169,7 @@ namespace dx {
         if (rbr::is_rendering_3d() && State == D3DTS_PROJECTION) {
             shader::current_projection_matrix = m4_from_d3d(*pMatrix);
             shader::current_projection_matrix_inverse = glm::inverse(shader::current_projection_matrix);
-            fixedfunction::current_projection_matrix = d3d_from_m4(g::projection_matrix);
+            fixedfunction::current_projection_matrix = d3d_from_m4(g::projection_matrix[g::current_render_target.value_or(RenderTarget::Primary)]);
             return g::hooks::set_transform.call(g::d3d_dev, State, &fixedfunction::current_projection_matrix);
         } else if (rbr::is_rendering_3d() && State == D3DTS_VIEW) {
             fixedfunction::current_view_matrix = d3d_from_m4(get_translation_matrix() * get_rotation_matrix() * m4_from_d3d(*pMatrix));
@@ -266,9 +265,8 @@ namespace dx {
         GetWindowRect(hFocusWindow, &rect);
 
         g::swapchains.reserve(g::cfg.cameras.size() - 1);
-        for (int i = 0; i < g::cfg.cameras.size(); ++i) {
+        for (size_t i = 0; i < g::cfg.cameras.size(); ++i) {
             if (i == RenderTarget::Primary) {
-                // TODO: Why not backbuffer size?
                 g::cfg.cameras[i].w() = w;
                 g::cfg.cameras[i].h() = h;
                 continue;
@@ -283,6 +281,7 @@ namespace dx {
             g::cfg.cameras[i].h() = winh;
 
             HWND wnd = CreateWindowExA(0, windowClass, std::format("openRBRTriples screen #{}", i).c_str(), WS_POPUP | WS_VISIBLE, x, y, winw, winh, nullptr, nullptr, instance, nullptr);
+            pPresentationParameters->PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
             pPresentationParameters->hDeviceWindow = wnd;
             pPresentationParameters->BackBufferWidth = winw;
             pPresentationParameters->BackBufferHeight = winh;

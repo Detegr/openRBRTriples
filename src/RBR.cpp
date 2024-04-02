@@ -98,6 +98,7 @@ namespace rbr {
     {
         float* original_fov_ptr;
         float* current_fov_ptr = reinterpret_cast<float*>(p + 0x70 + 0x2c0);
+        float* z_near_ptr = reinterpret_cast<float*>(p + 0x70 + 0x290);
 
         // The 3 cameras (bumper, bonnet, internal) whose FoV can be set via Pacenote plugin
         // The FoV is read from these values by the game, and written into `current_fov_ptr` in memory
@@ -124,30 +125,40 @@ namespace rbr {
 
         // This has to be done to make the FoV value correct for glm::perspectiveFovLH
         // It is always 4/3 even if the current resolution has a different aspect ratio
-        float original_fov = *original_fov_ptr / (4.0 / 3.0);
+        float original_fov = *original_fov_ptr / (4.0f / 3.0f);
         float fov = glm::radians(original_fov);
 
-        // Use the set FoV as the FoV for rendering the game
-        g::projection_matrix = glm::perspectiveFovLH(
-            fov,
-            static_cast<float>(g::cfg.cameras[0].w()),
-            static_cast<float>(g::cfg.cameras[0].h()),
-            0.10f, 10000.0f);
+        // For replay cameras that automatically adjust the z-near, cap z-near to 1.0
+        // as the default does not always render right with the wide FoV we're using.
+        float znear = *g::camera_type_ptr == 7 ? std::min(1.0f, *z_near_ptr) : *z_near_ptr;
 
         // Re-calculate the correct angle for the new FoV for the side views
-        for (int i = 1; i < g::cfg.cameras.size(); ++i) {
-            const auto aspect = static_cast<double>(g::cfg.cameras[0].w()) / static_cast<double>(g::cfg.cameras[0].h());
-            g::cfg.cameras[i].angle = 2.0 * std::atan(std::tan(fov / 2.0) * aspect);
+        for (size_t i = 0; i < g::cfg.cameras.size(); ++i) {
+            auto cfov = fov + static_cast<float>(g::cfg.cameras[i].fov);
+            g::projection_matrix[i] = glm::perspectiveFovLH(
+                cfov,
+                static_cast<float>(g::cfg.cameras[0].w()),
+                static_cast<float>(g::cfg.cameras[0].h()),
+                znear, 10000.0f);
+
+            if (i != 0) {
+                const auto aspect = static_cast<double>(g::cfg.cameras[0].w()) / static_cast<double>(g::cfg.cameras[0].h());
+                g::cfg.cameras[i].angle = 2.0 * std::atan(std::tan(fov / 2.0) * aspect);
+            }
         }
 
-        // Apply 3x times the normal FoV for rendering in order to prevent objects from disappearing
+        // Apply larger FoV for rendering in order to prevent objects from disappearing
         // from the peripheral view. As we're using a separate projection matrix, this has no effect
         // on the actual projection, just for the RBR rendering optimization logic that starts culling
         // objects that are not visible.
         const auto camera_post_prepare_this = reinterpret_cast<void*>(p + 0x70);
         const auto camera_fov_this = *reinterpret_cast<void**>(p + 0xcf4);
 
-        *current_fov_ptr = original_fov * 3.0;
+        // 2.4 seems to work very well with all kinds of FoVs for some reason
+        // It really like a sweet spot with the least amount of objects popping out
+        // We can't go 3 times the normal FoV because RBR does not like very wide FoVs.
+        // With very wide FoVs the objects start to disappear the same way as they do with a small FoV.
+        *current_fov_ptr = glm::degrees(2.4f);
         post_prepare_camera(camera_post_prepare_this, 0);
         apply_camera_fov(camera_fov_this, 0);
         *current_fov_ptr = *original_fov_ptr;
@@ -181,9 +192,13 @@ namespace rbr {
             g::stage_id_ptr = reinterpret_cast<uint32_t*>(*reinterpret_cast<uintptr_t*>(*GAME_MODE_EXT_2_PTR + 0x70) + 0x20);
         }
 
-        update_current_camera_fov(ptr);
+        auto should_draw = *reinterpret_cast<uint32_t*>(ptr + 0x720) == 0;
 
-        return *reinterpret_cast<uint32_t*>(ptr + 0x720) == 0;
+        if (should_draw && (g::game_mode == GameMode::MainMenu || g::game_mode == GameMode::Driving || g::game_mode == GameMode::Replay || g::game_mode == Pause || g::game_mode == PreStage)) {
+            update_current_camera_fov(ptr);
+        }
+
+        return should_draw;
     }
 
     void change_camera(void* p, uint32_t cameraType)
@@ -220,13 +235,15 @@ namespace rbr {
         int i = 0;
 
         for (const auto& c : g::cfg.cameras) {
-            if (!flipflop && i == RenderTarget::Left) {
-                i++;
-                continue;
-            }
-            if (flipflop && i == RenderTarget::Right) {
-                i++;
-                continue;
+            if (g::cfg.side_monitors_half_hz) {
+                if (!flipflop && i == RenderTarget::Left) {
+                    i++;
+                    continue;
+                }
+                if (flipflop && i == RenderTarget::Right) {
+                    i++;
+                    continue;
+                }
             }
             dx::set_render_target(static_cast<RenderTarget>(i));
             g::hooks::render.call(p);

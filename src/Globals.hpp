@@ -61,7 +61,7 @@ namespace g {
     extern uint8_t* btb_track_status_ptr;
 
     // Custom projection matrix used by the plugin
-    extern M4 projection_matrix;
+    extern M4 projection_matrix[3];
 
     // Hooks to DirectX and RBR functions
     namespace hooks {

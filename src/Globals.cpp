@@ -16,7 +16,7 @@ namespace g {
     IDirect3DSurface9* original_render_target;
     IDirect3DSurface9* original_depth_stencil_target;
     uint8_t* btb_track_status_ptr;
-    M4 projection_matrix;
+    M4 projection_matrix[3];
 
     namespace hooks {
         // DirectX functions
