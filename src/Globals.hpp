@@ -73,7 +73,6 @@ namespace g {
         extern Hook<decltype(IDirect3DDevice9Vtbl::Present)> present;
         extern Hook<decltype(IDirect3DDevice9Vtbl::CreateVertexShader)> create_vertex_shader;
         extern Hook<decltype(IDirect3DDevice9Vtbl::SetRenderTarget)> btb_set_render_target;
-        extern Hook<decltype(IDirect3DDevice9Vtbl::DrawIndexedPrimitive)> draw_indexed_primitive;
         extern Hook<decltype(IDirect3DDevice9Vtbl::DrawPrimitive)> draw_primitive;
 
         // RBR functions

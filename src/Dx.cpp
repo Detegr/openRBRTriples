@@ -67,7 +67,7 @@ namespace dx {
             if (g::d3d_dev->SetDepthStencilSurface(dt) != D3D_OK) {
                 dbg("Failed to set depth surface");
             }
-            if (clear && g::d3d_dev->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, 0, 1.0, 0) != D3D_OK) {
+            if (clear && g::d3d_dev->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER | D3DCLEAR_STENCIL, 0, 1.0, 0) != D3D_OK) {
                 dbg("Failed to clear surface");
             }
             g::current_render_target = tgt;
@@ -209,28 +209,6 @@ namespace dx {
         return g::hooks::draw_primitive.call(This, PrimitiveType, StartVertex, PrimitiveCount);
     }
 
-    HRESULT __stdcall DrawIndexedPrimitive(IDirect3DDevice9* This, D3DPRIMITIVETYPE PrimitiveType, INT BaseVertexIndex, UINT MinVertexIndex, UINT NumVertices, UINT startIndex, UINT primCount)
-    {
-        IDirect3DVertexShader9* shader;
-        IDirect3DBaseTexture9* texture;
-        g::d3d_dev->GetVertexShader(&shader);
-        g::d3d_dev->GetTexture(0, &texture);
-        if (rbr::is_rendering_3d() && !shader && !texture) {
-            if (!rbr::is_using_cockpit_camera()) {
-                // Don't draw these if we're not in a cockpit camera.
-                // In this mode, a black transparent square is drawn in front of the car
-                // if car shadows are enabled.
-                return 0;
-            }
-        } else {
-            if (shader)
-                shader->Release();
-            if (texture)
-                texture->Release();
-        }
-        return g::hooks::draw_indexed_primitive.call(g::d3d_dev, PrimitiveType, BaseVertexIndex, MinVertexIndex, NumVertices, startIndex, primCount);
-    }
-
     HRESULT __stdcall CreateDevice(
         IDirect3D9* This,
         UINT Adapter,
@@ -300,7 +278,6 @@ namespace dx {
             g::hooks::set_transform = Hook(devvtbl->SetTransform, SetTransform);
             g::hooks::present = Hook(devvtbl->Present, Present);
             g::hooks::create_vertex_shader = Hook(devvtbl->CreateVertexShader, CreateVertexShader);
-            g::hooks::draw_indexed_primitive = Hook(devvtbl->DrawIndexedPrimitive, DrawIndexedPrimitive);
             g::hooks::draw_primitive = Hook(devvtbl->DrawPrimitive, DrawPrimitive);
         } catch (const std::runtime_error& e) {
             dbg(e.what());

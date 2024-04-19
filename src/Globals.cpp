@@ -27,7 +27,6 @@ namespace g {
         Hook<decltype(IDirect3DDevice9Vtbl::Present)> present;
         Hook<decltype(IDirect3DDevice9Vtbl::CreateVertexShader)> create_vertex_shader;
         Hook<decltype(IDirect3DDevice9Vtbl::SetRenderTarget)> btb_set_render_target;
-        Hook<decltype(IDirect3DDevice9Vtbl::DrawIndexedPrimitive)> draw_indexed_primitive;
         Hook<decltype(IDirect3DDevice9Vtbl::DrawPrimitive)> draw_primitive;
 
         // RBR functions
