@@ -1,4 +1,4 @@
-name: Build openRBRVR
+name: Build openRBRTriples
 
 on:
   push:
@@ -31,16 +31,18 @@ jobs:
         $env:PATH += ";C:\Program Files\CMake\bin"
 
     - name: Configure CMake
-      run: cmake -S . -B build -A Win32 -DCMAKE_BUILD_TYPE=Release
+      run: cmake -S . -B build -A Win32 -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
     - name: Build
-      run: cmake --build build --config Release
+      run: cmake --build build --config RelWithDebInfo
 
-    - name: Upload openRBRVR.dll
-      uses: actions/upload-artifact@v2
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
       with:
-        name: openRBRVR.dll
-        path: build\Release\openRBRVR.dll
+        name: openRBRTriples
+        path: |
+          build\RelWithDebInfo\openRBRTriples.dll
+          build\RelWithDebInfo\openRBRTriples.pdb
 
   release:
     runs-on: ubuntu-latest
@@ -53,10 +55,10 @@ jobs:
     - name: Fetch tags
       run: git fetch --depth=1 origin +refs/tags/*:refs/tags/*
 
-    - name: Download Build Artifact
-      uses: actions/download-artifact@v2
+    - name: Download openRBRTriples artifact
+      uses: actions/download-artifact@v4
       with:
-        name: openRBRVR.dll
+        name: openRBRTriples
 
     - name: Create changelog
       id: changelog
@@ -68,17 +70,16 @@ jobs:
         done <<< "$changes"
         echo EOF >> $GITHUB_ENV
 
-    - name: Create release zip
-      id: release-zip
-      run: |
-        mkdir -p openRBRVR-${{ github.ref_name }}/Plugins/openRBRVR
-        cp thirdparty/dll/* openRBRVR-${{ github.ref_name }}
-        cp openRBRVR.dll openRBRVR.toml.sample openRBRVR-${{ github.ref_name }}/Plugins
-        cp LICENSE openRBRVR-${{ github.ref_name }}/Plugins/openRBRVR
-        cp README.md openRBRVR-${{ github.ref_name }}/Plugins/openRBRVR/README.openrbrvr.txt
-        cp README_FR.md openRBRVR-${{ github.ref_name }}/Plugins/openRBRVR/README_FR.openrbrvr.txt
-        cp README_CZ.md openRBRVR-${{ github.ref_name }}/Plugins/openRBRVR/README_CZ.openrbrvr.txt
-        zip -r openRBRVR-${{ github.ref_name }}.zip openRBRVR-${{ github.ref_name }}
+    # - name: Create release zip
+    # id: release-zip
+    # run: |
+    #   mkdir -p openRBRTriples-${{ github.ref_name }}/Plugins/openRBRTriples
+    #   cp openRBRTriples.dll openRBRTriples-${{ github.ref_name }}/Plugins
+    #   cp LICENSE openRBRTriples-${{ github.ref_name }}/Plugins/openRBRTriples
+    #   cp README.md openRBRTriples-${{ github.ref_name }}/Plugins/openRBRTriples/README.openrbrvr.txt
+    #   cp README_FR.md openRBRTriples-${{ github.ref_name }}/Plugins/openRBRTriples/README_FR.openrbrvr.txt
+    #   cp README_CZ.md openRBRTriples-${{ github.ref_name }}/Plugins/openRBRTriples/README_CZ.openrbrvr.txt
+    #   zip -r openRBRTriples-${{ github.ref_name }}.zip openRBRTriples-${{ github.ref_name }}
 
     - name: Create GitHub release
       id: create_release
@@ -92,14 +93,22 @@ jobs:
         prerelease: false
         body: ${{ env.CHANGELOG }}
 
-    - name: Upload release asset
-      id: upload-release-asset
+    - name: Upload openRBRTriples.dll
+      id: upload_dll
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_name: openRBRVR-${{ github.ref_name }}.zip
-        asset_path: openRBRVR-${{ github.ref_name }}.zip
-        asset_content_type: application/zip
+        asset_name: openRBRTriples.dll
+        asset_path: openRBRTriples.dll
 
+    - name: Upload openRBRTriples.pdb
+      id: upload_pdb
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_name: openRBRTriples.pdb
+        asset_path: openRBRTriples.pdb
