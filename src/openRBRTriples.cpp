@@ -97,7 +97,7 @@ void openRBRTriples::DrawMenuEntries(const std::ranges::forward_range auto& entr
     }
     game->SetFont(IRBRGame::EFonts::FONT_SMALL);
     game->SetColor(0.7f, 0.7f, 0.7f, 1.0f);
-    game->WriteText(10.0f, 458.0f, std::format("openRBRTriples {} - https://github.com/Detegr/openRBRVR", VERSION_STR).c_str());
+    game->WriteText(10.0f, 458.0f, std::format("openRBRTriples {} - https://github.com/Detegr/openRBRTriples", VERSION_STR).c_str());
 }
 
 void openRBRTriples::DrawFrontEndPage()
@@ -125,11 +125,9 @@ void openRBRTriples::DrawFrontEndPage()
     game->SetFont(IRBRGame::EFonts::FONT_BIG);
     game->SetMenuColor(IRBRGame::EMenuColors::MENU_TEXT);
 
-    auto i = 0;
     if (!isLicenseMenu) {
-        for (const auto& txt : entries[g::menu->entry_idx].long_text) {
+        for (const auto& [i, txt] : std::views::enumerate(entries[g::menu->entry_idx].long_text)) {
             game->WriteText(65.0f, endOfItems + ((i + 1) * g::menu->row_height()), txt.c_str());
-            i++;
         }
     }
 }

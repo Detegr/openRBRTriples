@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <ranges>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -39,19 +40,27 @@ struct CameraConfig {
 struct Config {
     std::vector<CameraConfig> cameras;
     double fov;
+    bool aa_center_screen_only;
     bool side_monitors_half_hz;
+    bool side_monitors_half_hz_btb_only;
 
     Config& operator=(const Config& rhs)
     {
         cameras = rhs.cameras;
         fov = rhs.fov;
+        aa_center_screen_only = rhs.aa_center_screen_only;
         side_monitors_half_hz = rhs.side_monitors_half_hz;
+        side_monitors_half_hz_btb_only = rhs.side_monitors_half_hz_btb_only;
         return *this;
     }
 
     bool operator==(const Config& rhs) const
     {
-        return cameras == rhs.cameras && fov == rhs.fov && side_monitors_half_hz == rhs.side_monitors_half_hz;
+        return cameras == rhs.cameras
+            && fov == rhs.fov
+            && aa_center_screen_only == rhs.aa_center_screen_only
+            && side_monitors_half_hz == rhs.side_monitors_half_hz
+            && side_monitors_half_hz_btb_only == rhs.side_monitors_half_hz_btb_only;
     }
 
     bool write(const std::filesystem::path& path) const
@@ -61,7 +70,7 @@ struct Config {
             return false;
         }
         auto cams = toml::array {};
-        for (auto& cam : cameras) {
+        for (const auto& [i, cam] : std::views::enumerate(cameras)) {
             cams.push_back(toml::table {
                 { "x", cam.extent[0] },
                 { "y", cam.extent[1] },
@@ -71,11 +80,14 @@ struct Config {
                 { "cropy", cam.crop.y },
                 { "translatex", cam.translation.x },
                 { "translatey", cam.translation.y },
-                { "angle", cam.angle_adjustment } });
+                { "angle", cam.angle_adjustment },
+                { "primary", i == 0 } });
         }
         toml::table out {
+            { "anti_alias_center_screen_only", aa_center_screen_only },
             { "side_monitors_half_hz", side_monitors_half_hz },
-            { "camera", toml::array { cams } },
+            { "side_monitors_half_hz_btb_only", side_monitors_half_hz_btb_only },
+            { "screen", toml::array { cams } },
         };
 
         f << out;
@@ -114,6 +126,9 @@ struct Config {
         double aspect = static_cast<double>(defaultExtent[2]) / static_cast<double>(defaultExtent[3]);
         const auto fov = 1.0472; // 60 degrees // parsed["fov"].value_or(1.0) / (4.0 / 3.0);
         auto cameras = parsed["camera"];
+        if (!cameras.is_array_of_tables()) {
+            cameras = parsed["screen"];
+        }
         if (cameras.is_array_of_tables()) {
             cameras.as_array()->for_each([fov, aspect, &cfg](toml::table& tbl) {
                 auto extent = glm::ivec4 {
@@ -144,7 +159,9 @@ struct Config {
             });
         }
 
+        cfg.aa_center_screen_only = parsed["anti_alias_center_screen_only"].value_or(true);
         cfg.side_monitors_half_hz = parsed["side_monitors_half_hz"].value_or(true);
+        cfg.side_monitors_half_hz_btb_only = parsed["side_monitors_half_hz_btb_only"].value_or(true);
 
         if (cfg.cameras.empty()) {
             cfg.cameras.emplace_back(CameraConfig {

@@ -229,30 +229,21 @@ namespace rbr {
         }
 
         g::is_rendering_3d = true;
-        dx::set_render_target(RenderTarget::Primary);
 
-        static bool flipflop;
-        int i = 0;
+        static RenderTarget render_target_to_skip = RenderTarget::Left;
 
-        for (const auto& c : g::cfg.cameras) {
-            if (g::cfg.side_monitors_half_hz) {
-                if (!flipflop && i == RenderTarget::Left) {
-                    i++;
-                    continue;
-                }
-                if (flipflop && i == RenderTarget::Right) {
-                    i++;
+        for (const auto& [i, c] : std::views::enumerate(g::cfg.cameras)) {
+            if (g::cfg.side_monitors_half_hz && i == render_target_to_skip) {
+                if (!g::cfg.side_monitors_half_hz_btb_only || (g::cfg.side_monitors_half_hz_btb_only && rbr::is_on_btb_stage())) {
                     continue;
                 }
             }
             dx::set_render_target(static_cast<RenderTarget>(i));
             g::hooks::render.call(p);
-            i++;
         };
 
-        flipflop = !flipflop;
+        render_target_to_skip = (render_target_to_skip == RenderTarget::Right) ? RenderTarget::Left : RenderTarget::Right;
         dx::set_render_target(RenderTarget::Primary, false);
-
         g::is_rendering_3d = false;
     }
 }

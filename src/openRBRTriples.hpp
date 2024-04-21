@@ -10,7 +10,7 @@ class openRBRTriples : public IPlugin {
 public:
     openRBRTriples(IRBRGame* g);
     virtual ~openRBRTriples(void);
-    virtual const char* GetName(void) { return "openRBRVR"; }
+    virtual const char* GetName(void) { return "openRBRTriples"; }
     virtual void DrawFrontEndPage(void);
     virtual void DrawResultsUI(void) {};
     virtual void HandleFrontEndEvents(char txtKeyboard, bool bUp, bool bDown, bool bLeft, bool bRight, bool bSelect);

@@ -18,7 +18,7 @@
 
 inline void dbg(const std::string& str)
 {
-    OutputDebugString(std::format("[openRBRVR] {}\n", str).c_str());
+    OutputDebugString(std::format("[openRBRTriples] {}\n", str).c_str());
 }
 
 using M4 = glm::mat4x4;

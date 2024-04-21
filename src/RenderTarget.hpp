@@ -13,6 +13,7 @@ bool create_render_target(
     IDirect3DSurface9** surface,
     IDirect3DSurface9** depth_stencil_surface,
     D3DFORMAT fmt,
+    D3DFORMAT depth_stencil_fmt,
     D3DMULTISAMPLE_TYPE msaa,
     uint32_t w,
     uint32_t h);

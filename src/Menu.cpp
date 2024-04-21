@@ -41,13 +41,55 @@ void Toggle(int& value)
     }
 }
 
+static void toggle_side_monitor_setting(bool forward)
+{
+    if (g::cfg.side_monitors_half_hz) {
+        if (g::cfg.side_monitors_half_hz_btb_only) {
+            if (forward) {
+                g::cfg.side_monitors_half_hz_btb_only = false;
+            } else {
+                g::cfg.side_monitors_half_hz = false;
+                g::cfg.side_monitors_half_hz_btb_only = false;
+            }
+        } else {
+            if (forward) {
+                g::cfg.side_monitors_half_hz = false;
+            } else {
+                g::cfg.side_monitors_half_hz_btb_only = true;
+            }
+        }
+    } else {
+        if (forward) {
+            g::cfg.side_monitors_half_hz_btb_only = true;
+            g::cfg.side_monitors_half_hz = true;
+        } else {
+            g::cfg.side_monitors_half_hz_btb_only = false;
+            g::cfg.side_monitors_half_hz = true;
+        }
+    }
+}
+
 // clang-format off
 static class Menu main_menu = { "openRBRTriples", {
+  { .text = [] { return std::format("Run side monitors with half FPS: {}", g::cfg.side_monitors_half_hz ? (g::cfg.side_monitors_half_hz_btb_only ? "BTB only" : "ON") : "OFF"); },
+    .long_text = {"For better performance it is recommended to enable this setting", "at least for BTB stages."},
+    .menu_color = IRBRGame::EMenuColors::MENU_TEXT,
+    .position = Menu::menu_items_start_pos,
+    .left_action = [] { toggle_side_monitor_setting(false); },
+    .right_action = [] { toggle_side_monitor_setting(true); },
+    .select_action = [] { toggle_side_monitor_setting(true); },
+  },
+  { .text = [] { return std::format("Limit anti-aliasing to center screen: {}", g::cfg.aa_center_screen_only ? "ON" : "OFF"); },
+    .long_text = {"If anti-aliasing is enabled, apply it to center screen only.", "This will improve performance on cost of graphics on side monitors.", "Requires game restart to take an effect."},
+    .left_action = [] { Toggle(g::cfg.aa_center_screen_only); },
+    .right_action = [] { Toggle(g::cfg.aa_center_screen_only); },
+    .select_action = [] { Toggle(g::cfg.aa_center_screen_only); },
+  },
   { .text = id("Licenses"), .long_text = {"License information of open source libraries used in the plugin's implementation."}, .select_action = [] { select_menu(1); } },
-  { .text = id("Save the current config to openRBRVR.toml"),
+  { .text = id("Save the current config to openRBRTriples.toml"),
     .color = [] { return (g::cfg == g::saved_cfg) ? std::make_tuple(0.5f, 0.5f, 0.5f, 1.0f) : std::make_tuple(1.0f, 1.0f, 1.0f, 1.0f); },
     .select_action = [] {
-        if (g::cfg.write("Plugins\\openRBRVR.toml")) {
+        if (g::cfg.write("Plugins\\openRBRTriples.toml")) {
             g::saved_cfg = g::cfg;
         }
     }

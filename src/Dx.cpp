@@ -6,6 +6,7 @@
 #include "Version.hpp"
 
 #include <gtx/matrix_decompose.hpp>
+#include <ranges>
 
 // Compilation unit global variables
 namespace g {
@@ -56,7 +57,7 @@ namespace dx {
 
     void set_render_target(RenderTarget tgt, bool clear)
     {
-        auto& surface = g::surfaces[tgt];
+        const auto& surface = g::surfaces[tgt];
         IDirect3DSurface9* rt = std::get<0>(surface);
         IDirect3DSurface9* dt = std::get<1>(surface);
 
@@ -86,8 +87,7 @@ namespace dx {
             dbg("Failed to clear surface");
         }
 
-        auto i = 0;
-        for (auto& c : g::cfg.cameras) {
+        for (const auto& [i, c] : std::views::enumerate(g::cfg.cameras)) {
             RECT src = { c.crop.x, c.crop.y, c.crop.x + c.w(), c.crop.y + c.h() };
             if (i == RenderTarget::Primary) {
                 g::d3d_dev->StretchRect(std::get<0>(g::surfaces[i]), nullptr, g::original_render_target, nullptr, D3DTEXF_NONE);
@@ -97,7 +97,6 @@ namespace dx {
                 g::d3d_dev->StretchRect(std::get<0>(g::surfaces[i]), &src, back_buffer, nullptr, D3DTEXF_NONE);
                 back_buffer->Release();
             }
-            i++;
         }
 
         auto ret = g::hooks::present.call(g::d3d_dev, pSourceRect, pDestRect, hDestWindowOverride, pDirtyRegion);
@@ -184,7 +183,7 @@ namespace dx {
         // This was found purely by luck after testing all kinds of things.
         // For some reason, if this call is called with the original This pointer (from RBRRX)
         // plugins switching the render target (i.e. RBRHUD) will cause the stage geometry
-        // to not be rendered at all. Routing the call to the D3D device created by openRBRVR,
+        // to not be rendered at all. Routing the call to the D3D device created by openRBRTriples,
         // it seems to work correctly.
         return g::d3d_dev->SetRenderTarget(RenderTargetIndex, pRenderTarget);
     }
@@ -288,11 +287,20 @@ namespace dx {
         g::d3d_dev = dev;
 
         g::surfaces.resize(g::cfg.cameras.size());
-        auto i = 0;
-        for (auto& c : g::cfg.cameras) {
-            auto msaa = i == RenderTarget::Primary ? pPresentationParameters->MultiSampleType : D3DMULTISAMPLE_NONE;
-            create_render_target(dev, &std::get<0>(g::surfaces[i]), &std::get<1>(g::surfaces[i]), D3DFMT_X8R8G8B8, msaa, g::cfg.cameras[0].w(), g::cfg.cameras[0].h());
-            i++;
+        for (const auto& [i, c] : std::views::enumerate(g::cfg.cameras)) {
+            auto msaa = pPresentationParameters->MultiSampleType;
+            if (g::cfg.aa_center_screen_only && i != RenderTarget::Primary) {
+                msaa = D3DMULTISAMPLE_NONE;
+            }
+            create_render_target(
+                dev,
+                &std::get<0>(g::surfaces[i]),
+                &std::get<1>(g::surfaces[i]),
+                pPresentationParameters->BackBufferFormat,
+                pPresentationParameters->AutoDepthStencilFormat,
+                msaa,
+                g::cfg.cameras[0].w(),
+                g::cfg.cameras[0].h());
         }
 
         // Initialize RBR pointers here, as it's too early to do this in the plugin constructor
