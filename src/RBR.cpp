@@ -123,6 +123,8 @@ namespace rbr {
             return;
         }
 
+        float original_fov_ptr_value = *original_fov_ptr;
+
         // This has to be done to make the FoV value correct for glm::perspectiveFovLH
         // It is always 4/3 even if the current resolution has a different aspect ratio
         float original_fov = *original_fov_ptr / (4.0f / 3.0f);
@@ -141,7 +143,7 @@ namespace rbr {
                 static_cast<float>(g::cfg.cameras[0].h()),
                 znear, 10000.0f);
 
-            if (i != 0) {
+            if (i != RenderTarget::Primary) {
                 const auto aspect = static_cast<double>(g::cfg.cameras[0].w()) / static_cast<double>(g::cfg.cameras[0].h());
                 g::cfg.cameras[i].angle = 2.0 * std::atan(std::tan(fov / 2.0) * aspect);
             }
@@ -161,7 +163,7 @@ namespace rbr {
         *current_fov_ptr = glm::degrees(2.4f);
         post_prepare_camera(camera_post_prepare_this, 0);
         apply_camera_fov(camera_fov_this, 0);
-        *current_fov_ptr = *original_fov_ptr;
+        *current_fov_ptr = original_fov_ptr_value;
     }
 
     static bool init_or_update_game_data(uintptr_t ptr)
