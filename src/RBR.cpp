@@ -145,21 +145,24 @@ namespace rbr {
             }
         }
 
-        // Apply larger FoV for rendering in order to prevent objects from disappearing
-        // from the peripheral view. As we're using a separate projection matrix, this has no effect
-        // on the actual projection, just for the RBR rendering optimization logic that starts culling
-        // objects that are not visible.
-        const auto camera_post_prepare_this = reinterpret_cast<void*>(p + 0x70);
-        const auto camera_fov_this = *reinterpret_cast<void**>(p + 0xcf4);
+        // On BTB stages the FoV does not matter as the object culling effect is not in use
+        if (!is_on_btb_stage()) {
+            // Apply larger FoV for rendering in order to prevent objects from disappearing
+            // from the peripheral view. As we're using a separate projection matrix, this has no effect
+            // on the actual projection, just for the RBR rendering optimization logic that starts culling
+            // objects that are not visible.
+            const auto camera_post_prepare_this = reinterpret_cast<void*>(p + 0x70);
+            const auto camera_fov_this = *reinterpret_cast<void**>(p + 0xcf4);
 
-        // 2.4 seems to work very well with all kinds of FoVs for some reason
-        // It really like a sweet spot with the least amount of objects popping out
-        // We can't go 3 times the normal FoV because RBR does not like very wide FoVs.
-        // With very wide FoVs the objects start to disappear the same way as they do with a small FoV.
-        *current_fov_ptr = glm::degrees(2.4f);
-        post_prepare_camera(camera_post_prepare_this, 0);
-        apply_camera_fov(camera_fov_this, 0);
-        *current_fov_ptr = original_fov_ptr_value;
+            // 2.4 seems to work very well with all kinds of FoVs for some reason
+            // It really like a sweet spot with the least amount of objects popping out
+            // We can't go 3 times the normal FoV because RBR does not like very wide FoVs.
+            // With very wide FoVs the objects start to disappear the same way as they do with a small FoV.
+            *current_fov_ptr = glm::degrees(2.4f);
+            post_prepare_camera(camera_post_prepare_this, 0);
+            apply_camera_fov(camera_fov_this, 0);
+            *current_fov_ptr = original_fov_ptr_value;
+        }
     }
 
     static bool init_or_update_game_data(uintptr_t ptr)

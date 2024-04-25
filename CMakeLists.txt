@@ -36,7 +36,7 @@ set(HEADERS
 set(openRBRTriples_Major 0)
 set(openRBRTriples_Minor 1)
 set(openRBRTriples_Patch 0)
-set(openRBRTriples_Tweak 3)
+set(openRBRTriples_Tweak 4)
 set(openRBRTriples_TweakStr "-rc${openRBRTriples_Tweak}")
 
 configure_file(
