@@ -130,18 +130,14 @@ namespace rbr {
         float original_fov = *original_fov_ptr / (4.0f / 3.0f);
         float fov = glm::radians(original_fov);
 
-        // For replay cameras that automatically adjust the z-near, cap z-near to 1.0
-        // as the default does not always render right with the wide FoV we're using.
-        float znear = *g::camera_type_ptr == 7 ? std::min(1.0f, *z_near_ptr) : *z_near_ptr;
-
         // Re-calculate the correct angle for the new FoV for the side views
         for (size_t i = 0; i < g::cfg.cameras.size(); ++i) {
             auto cfov = fov + static_cast<float>(g::cfg.cameras[i].fov);
-            g::projection_matrix[i] = glm::perspectiveFovLH(
+            g::projection_matrix[i] = glm::perspectiveFovLH_ZO(
                 cfov,
                 static_cast<float>(g::cfg.cameras[0].w()),
                 static_cast<float>(g::cfg.cameras[0].h()),
-                znear, 10000.0f);
+                *z_near_ptr, 10000.0f);
 
             if (i != RenderTarget::Primary) {
                 const auto aspect = static_cast<double>(g::cfg.cameras[0].w()) / static_cast<double>(g::cfg.cameras[0].h());
