@@ -178,13 +178,6 @@ namespace rbr {
             g::game_mode = game_mode;
         }
 
-        if (g::game_mode == GameMode::MainMenu && !g::car_textures.empty()) [[unlikely]] {
-            // Clear saved car textures if we're in the menu
-            // Not sure if this is needed, but better be safe than sorry,
-            // the car textures will be reloaded when loading the stage.
-            g::car_textures.clear();
-        }
-
         if (!g::camera_type_ptr) [[unlikely]] {
             g::camera_type_ptr = reinterpret_cast<uint32_t*>(get_camera_info_ptr());
         }

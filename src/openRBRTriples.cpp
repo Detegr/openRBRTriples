@@ -13,11 +13,9 @@
 #include "Hook.hpp"
 #include "Licenses.hpp"
 #include "Menu.hpp"
-#include "Quaternion.hpp"
 #include "RBR.hpp"
 #include "Util.hpp"
 #include "Version.hpp"
-#include "Vertex.hpp"
 #include "openRBRTriples.hpp"
 
 openRBRTriples::openRBRTriples(IRBRGame* g)

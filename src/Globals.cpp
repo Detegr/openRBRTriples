@@ -11,7 +11,6 @@ namespace g {
     bool draw_overlay_border;
     IDirect3DDevice9* d3d_dev;
     std::vector<IDirect3DVertexShader9*> base_game_shaders;
-    std::unordered_map<std::string, IDirect3DTexture9*> car_textures;
     std::optional<RenderTarget> current_render_target;
     IDirect3DSurface9* original_render_target;
     IDirect3DSurface9* original_depth_stencil_target;

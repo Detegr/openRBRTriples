@@ -45,9 +45,6 @@ namespace g {
     // Vector of pointers to RBR base game vertex shaders
     extern std::vector<IDirect3DVertexShader9*> base_game_shaders;
 
-    // Mapping from car name to car textures
-    extern std::unordered_map<std::string, IDirect3DTexture9*> car_textures;
-
     // Current render target, if any
     extern std::optional<RenderTarget> current_render_target;
 

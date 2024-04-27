@@ -11,7 +11,6 @@ set(SOURCES
     "src/Menu.cpp"
     "src/RBR.cpp"
     "src/RenderTarget.cpp"
-    "src/Vertex.cpp"
     "src/openRBRTriples.cpp"
 )
 
@@ -24,11 +23,9 @@ set(HEADERS
     "src/IPlugin.h"
     "src/Licenses.hpp"
     "src/Menu.hpp"
-    "src/Quaternion.hpp"
     "src/RBR.hpp"
     "src/RenderTarget.hpp"
     "src/Util.hpp"
-    "src/Vertex.hpp"
     "src/openRBRTriples.def"
     "src/openRBRTriples.hpp"
 )
@@ -36,8 +33,8 @@ set(HEADERS
 set(openRBRTriples_Major 0)
 set(openRBRTriples_Minor 1)
 set(openRBRTriples_Patch 0)
-set(openRBRTriples_Tweak 4)
-set(openRBRTriples_TweakStr "-rc${openRBRTriples_Tweak}")
+set(openRBRTriples_Tweak 0)
+#set(openRBRTriples_TweakStr "-rc${openRBRTriples_Tweak}")
 
 configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/src/version.rc.in
