@@ -70,16 +70,14 @@ jobs:
         done <<< "$changes"
         echo EOF >> $GITHUB_ENV
 
-    # - name: Create release zip
-    # id: release-zip
-    # run: |
-    #   mkdir -p openRBRTriples-${{ github.ref_name }}/Plugins/openRBRTriples
-    #   cp openRBRTriples.dll openRBRTriples-${{ github.ref_name }}/Plugins
-    #   cp LICENSE openRBRTriples-${{ github.ref_name }}/Plugins/openRBRTriples
-    #   cp README.md openRBRTriples-${{ github.ref_name }}/Plugins/openRBRTriples/README.openrbrvr.txt
-    #   cp README_FR.md openRBRTriples-${{ github.ref_name }}/Plugins/openRBRTriples/README_FR.openrbrvr.txt
-    #   cp README_CZ.md openRBRTriples-${{ github.ref_name }}/Plugins/openRBRTriples/README_CZ.openrbrvr.txt
-    #   zip -r openRBRTriples-${{ github.ref_name }}.zip openRBRTriples-${{ github.ref_name }}
+    - name: Create release zip
+      id: release-zip
+      run: |
+        mkdir -p openRBRTriples-${{ github.ref_name }}/Plugins/openRBRTriples
+        cp openRBRTriples.dll openRBRTriples-${{ github.ref_name }}/Plugins
+        cp LICENSE openRBRTriples-${{ github.ref_name }}/Plugins/openRBRTriples
+        cp README.md openRBRTriples-${{ github.ref_name }}/Plugins/openRBRTriples/README.openrbrtriples.txt
+        zip -r openRBRTriples-${{ github.ref_name }}.zip openRBRTriples-${{ github.ref_name }}
 
     - name: Create GitHub release
       id: create_release
@@ -93,15 +91,15 @@ jobs:
         prerelease: false
         body: ${{ env.CHANGELOG }}
 
-    - name: Upload openRBRTriples.dll
-      id: upload_dll
+    - name: Upload openRBRTriples.zip
+      id: upload_zip
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_name: openRBRTriples.dll
-        asset_path: openRBRTriples.dll
+        asset_name: openRBRTriples-${{ github.ref_name }}.zip
+        asset_path: openRBRTriples-${{ github.ref_name }}.zip
 
     - name: Upload openRBRTriples.pdb
       id: upload_pdb
