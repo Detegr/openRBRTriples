@@ -40,9 +40,9 @@ struct CameraConfig {
 struct Config {
     std::vector<CameraConfig> cameras;
     double fov;
-    bool aa_center_screen_only;
-    bool side_monitors_half_hz;
-    bool side_monitors_half_hz_btb_only;
+    bool aa_center_screen_only = true;
+    bool side_monitors_half_hz = true;
+    bool side_monitors_half_hz_btb_only = true;
 
     Config& operator=(const Config& rhs)
     {
