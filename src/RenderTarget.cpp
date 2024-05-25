@@ -11,6 +11,7 @@ bool create_render_target(
     uint32_t w,
     uint32_t h)
 {
+    dbg(std::format("create_render_target: surface: {:x} depth_surface: {:x} fmt: {} depth_fmt: {} msaa: {} w: {} h: {}", (uintptr_t)surface, (uintptr_t)depth_stencil_surface, (int)fmt, (int)depth_stencil_fmt, (int)msaa, w, h));
     HRESULT ret = dev->CreateRenderTarget(w, h, fmt, msaa, 0, false, surface, nullptr);
     ret |= dev->CreateDepthStencilSurface(w, h, depth_stencil_fmt, msaa, 0, TRUE, depth_stencil_surface, nullptr);
     if (FAILED(ret)) {

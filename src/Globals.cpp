@@ -16,6 +16,7 @@ namespace g {
     IDirect3DSurface9* original_depth_stencil_target;
     uint8_t* btb_track_status_ptr;
     M4 projection_matrix[3];
+    IDirect3DSwapChain9* swapchain;
 
     namespace hooks {
         // DirectX functions

@@ -130,6 +130,14 @@ namespace rbr {
         float original_fov = *original_fov_ptr / (4.0f / 3.0f);
         float fov = glm::radians(original_fov);
 
+        // Z-near at 0 breaks Z-buffer (and does not make sense anyway), so force it non-zero
+        *z_near_ptr = std::max(0.01f, *z_near_ptr);
+
+        if (g::game_mode == GameMode::MainMenu) [[unlikely]] {
+            // Fix the main menu FoV to make it look good
+            fov = 0.4f;
+        }
+
         // Re-calculate the correct angle for the new FoV for the side views
         for (size_t i = 0; i < g::cfg.cameras.size(); ++i) {
             auto cfov = fov + static_cast<float>(g::cfg.cameras[i].fov);
@@ -167,9 +175,12 @@ namespace rbr {
 
     static bool init_or_update_game_data(uintptr_t ptr)
     {
-        static bool window_position_set = false;
-        if (!window_position_set) [[unlikely]] {
-            SetWindowPos(g::main_window, nullptr, g::cfg.cameras[0].extent[0], g::cfg.cameras[0].extent[1], 0, 0, SWP_NOSIZE);
+        static bool window_resized = false;
+        if (!window_resized) [[unlikely]] {
+            D3DPRESENT_PARAMETERS params;
+            g::swapchain->GetPresentParameters(&params);
+            SetWindowPos(g::main_window, HWND_TOP, 0, 0, params.BackBufferWidth, params.BackBufferHeight, SWP_NOREPOSITION | SWP_NOMOVE | SWP_FRAMECHANGED);
+            window_resized = true;
         }
 
         auto game_mode = *reinterpret_cast<GameMode*>(ptr + 0x728);

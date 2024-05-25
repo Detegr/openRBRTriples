@@ -10,7 +10,6 @@
 
 // Compilation unit global variables
 namespace g {
-    static std::vector<IDirect3DSwapChain9*> swapchains;
     static std::vector<std::tuple<IDirect3DSurface9*, IDirect3DSurface9*>> surfaces;
 }
 
@@ -87,22 +86,16 @@ namespace dx {
             dbg("Failed to clear surface");
         }
 
+        IDirect3DSurface9* back_buffer;
+        auto buf = g::swapchain->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &back_buffer);
         for (const auto& [i, c] : std::views::enumerate(g::cfg.cameras)) {
             RECT src = { c.crop.x, c.crop.y, c.crop.x + c.w(), c.crop.y + c.h() };
-            if (i == RenderTarget::Primary) {
-                g::d3d_dev->StretchRect(std::get<0>(g::surfaces[i]), nullptr, g::original_render_target, nullptr, D3DTEXF_NONE);
-            } else {
-                IDirect3DSurface9* back_buffer;
-                auto buf = g::swapchains[i - 1]->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &back_buffer);
-                g::d3d_dev->StretchRect(std::get<0>(g::surfaces[i]), &src, back_buffer, nullptr, D3DTEXF_NONE);
-                back_buffer->Release();
-            }
+            RECT dst = { c.extent[0], c.extent[1], c.extent[0] + c.w(), c.extent[1] + c.h() };
+            g::d3d_dev->StretchRect(std::get<0>(g::surfaces[i]), &src, back_buffer, &dst, D3DTEXF_NONE);
         }
+        back_buffer->Release();
 
-        auto ret = g::hooks::present.call(g::d3d_dev, pSourceRect, pDestRect, hDestWindowOverride, pDirtyRegion);
-        for (auto& swapchain : g::swapchains) {
-            swapchain->Present(nullptr, nullptr, nullptr, nullptr, 0);
-        }
+        auto ret = g::swapchain->Present(nullptr, nullptr, nullptr, nullptr, 0);
 
         g::original_render_target->Release();
         g::original_depth_stencil_target->Release();
@@ -113,14 +106,19 @@ namespace dx {
     static M4 get_rotation_matrix()
     {
         float angle = 0.0;
+        auto main_menu_camera_tweak = glm::identity<M4>();
         if (rbr::is_rendering_3d()) {
+            if (rbr::get_game_mode() == GameMode::MainMenu) {
+                // The main menu camera looks weird. This is an attempt to make it look like normal.
+                main_menu_camera_tweak = glm::translate(glm::mat4x4(1.0f), glm::vec3(0, -1.5f, 2.0f)) * glm::mat4_cast(glm::angleAxis(glm::radians(-20.0f), glm::vec3 { 1, 0, 0 }));
+            }
             angle = static_cast<float>(g::cfg.cameras[g::current_render_target.value()].angle);
             angle += static_cast<float>(glm::radians(g::cfg.cameras[g::current_render_target.value()].angle_adjustment));
             if (g::current_render_target.value() == RenderTarget::Right) {
                 angle = -angle;
             }
         }
-        return glm::rotate(glm::identity<M4>(), angle, { 0, 1, 0 });
+        return glm::rotate(glm::identity<M4>(), angle, { 0, 1, 0 }) * main_menu_camera_tweak;
     }
 
     static M4 get_translation_matrix()
@@ -241,7 +239,6 @@ namespace dx {
         RECT rect = {};
         GetWindowRect(hFocusWindow, &rect);
 
-        g::swapchains.reserve(g::cfg.cameras.size() - 1);
         for (size_t i = 0; i < g::cfg.cameras.size(); ++i) {
             if (i == RenderTarget::Primary) {
                 g::cfg.cameras[i].w() = w;
@@ -256,19 +253,6 @@ namespace dx {
 
             g::cfg.cameras[i].w() = winw;
             g::cfg.cameras[i].h() = winh;
-
-            HWND wnd = CreateWindowExA(0, windowClass, std::format("openRBRTriples screen #{}", i).c_str(), WS_POPUP | WS_VISIBLE, x, y, winw, winh, nullptr, nullptr, instance, nullptr);
-            pPresentationParameters->PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
-            pPresentationParameters->hDeviceWindow = wnd;
-            pPresentationParameters->BackBufferWidth = winw;
-            pPresentationParameters->BackBufferHeight = winh;
-
-            g::swapchains.push_back(nullptr);
-            ret = dev->CreateAdditionalSwapChain(pPresentationParameters, &g::swapchains.back());
-            if (FAILED(ret)) {
-                dbg("D3D initialization failed: CreateAdditionalSwapChain");
-                return ret;
-            }
         }
 
         auto devvtbl = get_vtable<IDirect3DDevice9Vtbl>(dev);
@@ -287,11 +271,15 @@ namespace dx {
         g::d3d_dev = dev;
 
         g::surfaces.resize(g::cfg.cameras.size());
+        auto total_width = 0;
         for (const auto& [i, c] : std::views::enumerate(g::cfg.cameras)) {
             auto msaa = pPresentationParameters->MultiSampleType;
             if (g::cfg.aa_center_screen_only && i != RenderTarget::Primary) {
                 msaa = D3DMULTISAMPLE_NONE;
             }
+
+            // Make all render targets the size of the main window
+            // If the side screens are smaller, the view will be cropped
             create_render_target(
                 dev,
                 &std::get<0>(g::surfaces[i]),
@@ -301,6 +289,19 @@ namespace dx {
                 msaa,
                 g::cfg.cameras[0].w(),
                 g::cfg.cameras[0].h());
+
+            // Calculate total_width for creating a swapchain for a large (combined width) window
+            total_width += g::cfg.cameras[i].w();
+        }
+
+        pPresentationParameters->hDeviceWindow = g::main_window;
+        pPresentationParameters->BackBufferWidth = total_width;
+        pPresentationParameters->BackBufferHeight = g::cfg.cameras[0].h();
+
+        ret = dev->CreateAdditionalSwapChain(pPresentationParameters, &g::swapchain);
+        if (FAILED(ret)) {
+            dbg("D3D initialization failed: CreateAdditionalSwapChain");
+            return ret;
         }
 
         // Initialize RBR pointers here, as it's too early to do this in the plugin constructor

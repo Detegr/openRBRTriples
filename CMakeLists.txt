@@ -31,10 +31,10 @@ set(HEADERS
 )
 
 set(openRBRTriples_Major 0)
-set(openRBRTriples_Minor 1)
+set(openRBRTriples_Minor 2)
 set(openRBRTriples_Patch 0)
 set(openRBRTriples_Tweak 0)
-#set(openRBRTriples_TweakStr "-rc${openRBRTriples_Tweak}")
+#set(openRBRTriples_TweakStr "-beta${openRBRTriples_Tweak}")
 
 configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/src/version.rc.in

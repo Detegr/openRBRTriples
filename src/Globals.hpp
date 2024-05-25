@@ -60,6 +60,9 @@ namespace g {
     // Custom projection matrix used by the plugin
     extern M4 projection_matrix[3];
 
+    // Swapchain used to render all windows into one
+    extern IDirect3DSwapChain9* swapchain;
+
     // Hooks to DirectX and RBR functions
     namespace hooks {
         // DirectX functions
