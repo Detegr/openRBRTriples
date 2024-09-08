@@ -38,6 +38,7 @@ openRBRTriples::openRBRTriples(IRBRGame* g)
     try {
         g::hooks::create = Hook(d3dcreate, dx::Direct3DCreate9);
         g::hooks::render = Hook(*reinterpret_cast<decltype(rbr::render)*>(rbr::get_render_function_addr()), rbr::render);
+
     } catch (const std::runtime_error& e) {
         dbg(e.what());
         MessageBoxA(nullptr, e.what(), "Hooking failed", MB_OK);

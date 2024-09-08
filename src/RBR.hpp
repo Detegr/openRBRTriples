@@ -21,6 +21,7 @@ namespace rbr {
     };
 
     uintptr_t get_render_function_addr();
+    uintptr_t get_hedgehog_address(uintptr_t);
     GameMode get_game_mode();
     bool is_on_btb_stage();
     bool is_loading_btb_stage();
@@ -29,7 +30,6 @@ namespace rbr {
     uint32_t get_current_stage_id();
 
     void update_current_camera_fov(uintptr_t p);
-    void change_camera(void* p, uint32_t cameraType);
 
     // Hookable functions
     void __fastcall render(void* p);

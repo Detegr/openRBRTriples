@@ -28,10 +28,27 @@ namespace rbr {
         return addr;
     }
 
+    static uintptr_t get_hedgehog_base_address()
+    {
+        // If ASLR is enabled, the base address is randomized
+        static uintptr_t addr;
+        addr = reinterpret_cast<uintptr_t>(GetModuleHandle("HedgeHog3D.dll"));
+        if (!addr) {
+            dbg("Could not retrieve RBR base address, this may be bad.");
+        }
+        return addr;
+    }
+
     static uintptr_t get_address(uintptr_t target)
     {
         constexpr uintptr_t RBR_ABSOLUTE_LOAD_ADDR = 0x400000;
         return get_base_address() + target - RBR_ABSOLUTE_LOAD_ADDR;
+    }
+
+    uintptr_t get_hedgehog_address(uintptr_t target)
+    {
+        constexpr uintptr_t HEDGEHOG_ABSOLUTE_LOAD_ADDR = 0x10000000;
+        return get_hedgehog_base_address() + target - HEDGEHOG_ABSOLUTE_LOAD_ADDR;
     }
 
     static uintptr_t RENDER_FUNCTION_ADDR = get_address(0x47E1E0);
@@ -39,9 +56,9 @@ namespace rbr {
     static uintptr_t* GAME_MODE_EXT_2_PTR = reinterpret_cast<uintptr_t*>(get_address(0x007EA678));
 
     using ChangeCameraFn = void(__thiscall*)(void* p, int cameraType, uint32_t a);
-    using PrepareCameraFn = void(__thiscall*)(void* This, uint32_t a);
-    using PostPrepareCameraFn = void(__thiscall*)(void* This, uint32_t a);
-    static ChangeCameraFn change_camera_fn = reinterpret_cast<ChangeCameraFn>(get_address(0x487680));
+    using PrepareCameraFn = void(__thiscall*)(void* This, float a);
+    using SomeFn = void(__thiscall*)(void* This);
+    using PostPrepareCameraFn = void(__thiscall*)(void* This, float a);
     static PrepareCameraFn apply_camera_position = reinterpret_cast<PrepareCameraFn>(get_address(0x4825B0));
     static PrepareCameraFn apply_camera_fov = reinterpret_cast<PrepareCameraFn>(get_address(0x4BF690));
     static PostPrepareCameraFn post_prepare_camera = reinterpret_cast<PostPrepareCameraFn>(get_address(0x487320));
@@ -90,6 +107,20 @@ namespace rbr {
     {
         uintptr_t cameraData = *reinterpret_cast<uintptr_t*>(*reinterpret_cast<uintptr_t*>(CAR_INFO_ADDR) + 0x758);
         return *reinterpret_cast<uintptr_t*>(cameraData + 0x10);
+    }
+
+    static void write_byte(uint8_t* address, uint8_t newValue)
+    {
+        DWORD oldProtect;
+
+        // Change memory protection to allow writing
+        if (VirtualProtect(address, sizeof(BYTE), PAGE_EXECUTE_READWRITE, &oldProtect)) {
+            *address = newValue; // Modify the byte
+            // Restore the original protection
+            VirtualProtect(address, sizeof(BYTE), oldProtect, &oldProtect);
+        } else {
+            std::cerr << "Failed to change memory protection." << std::endl;
+        }
     }
 
     // Read camera FoV from the currently selected RBR camera
@@ -153,7 +184,9 @@ namespace rbr {
             }
         }
 
+        const auto mode = rbr::get_game_mode();
         // On BTB stages the FoV does not matter as the object culling effect is not in use
+        // Also there's no bad weather on BTB stages so we don't need the wiper fix either
         if (!is_on_btb_stage()) {
             // Apply larger FoV for rendering in order to prevent objects from disappearing
             // from the peripheral view. As we're using a separate projection matrix, this has no effect
@@ -167,8 +200,31 @@ namespace rbr {
             // We can't go 3 times the normal FoV because RBR does not like very wide FoVs.
             // With very wide FoVs the objects start to disappear the same way as they do with a small FoV.
             *current_fov_ptr = glm::degrees(2.4f);
-            post_prepare_camera(camera_post_prepare_this, 0);
-            apply_camera_fov(camera_fov_this, 0);
+            post_prepare_camera(camera_post_prepare_this, 0.0);
+
+            // Fix wiper animation
+            // The function at 0x10067254 must not be called when patching the FoV
+            // for the wiper animation to run correctly.
+            // Therefore, nop (0x90) out the call at 0x10067254 when calling `apply_camera_fov` and
+            // restore it back to correctly call it in g::hooks::render
+            static uint8_t* wiper_anim_loc;
+            static uint8_t orig_bytes[5];
+
+            if (!wiper_anim_loc) {
+                wiper_anim_loc = reinterpret_cast<uint8_t*>(rbr::get_hedgehog_address(0x10067254));
+                memcpy(orig_bytes, wiper_anim_loc, 5);
+            }
+
+            for (int i = 0; i < 5; ++i) {
+                write_byte(wiper_anim_loc + i, 0x90);
+            }
+
+            apply_camera_fov(camera_fov_this, 0.0);
+
+            for (int i = 0; i < 5; ++i) {
+                write_byte(wiper_anim_loc + i, orig_bytes[i]);
+            }
+
             *current_fov_ptr = original_fov_ptr_value;
         }
     }
@@ -205,17 +261,6 @@ namespace rbr {
         }
 
         return should_draw;
-    }
-
-    void change_camera(void* p, uint32_t cameraType)
-    {
-        const auto camera_data = *reinterpret_cast<uintptr_t*>(*reinterpret_cast<uintptr_t*>(CAR_INFO_ADDR) + 0x758);
-        const auto camera_info = reinterpret_cast<void*>(*reinterpret_cast<uintptr_t*>(camera_data + 0x10));
-        const auto camera_fov_this = *reinterpret_cast<void**>(reinterpret_cast<uintptr_t>(p) + 0xcf4);
-
-        change_camera_fn(camera_info, cameraType, 1);
-        apply_camera_position(p, 0);
-        apply_camera_fov(camera_fov_this, 0);
     }
 
     // RBR 3D scene draw function is rerouted here
