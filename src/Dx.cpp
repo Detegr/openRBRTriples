@@ -88,9 +88,12 @@ namespace dx {
 
         IDirect3DSurface9* back_buffer;
         auto buf = g::swapchain->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &back_buffer);
+
+        auto xmin = std::min_element(g::cfg.cameras.cbegin(), g::cfg.cameras.cend(), [](const auto& a, const auto& b) { return a.extent[0] < b.extent[0]; })->extent[0];
         for (const auto& [i, c] : std::views::enumerate(g::cfg.cameras)) {
             RECT src = { c.crop.x, c.crop.y, c.crop.x + c.w(), c.crop.y + c.h() };
-            RECT dst = { c.extent[0], c.extent[1], c.extent[0] + c.w(), c.extent[1] + c.h() };
+            const auto dstx = c.extent[0] + std::abs(xmin);
+            RECT dst = { dstx, c.extent[1], dstx + c.w(), c.extent[1] + c.h() };
             g::d3d_dev->StretchRect(std::get<0>(g::surfaces[i]), &src, back_buffer, &dst, D3DTEXF_NONE);
         }
         back_buffer->Release();

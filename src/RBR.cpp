@@ -179,7 +179,8 @@ namespace rbr {
         if (!window_resized) [[unlikely]] {
             D3DPRESENT_PARAMETERS params;
             g::swapchain->GetPresentParameters(&params);
-            SetWindowPos(g::main_window, HWND_TOP, 0, 0, params.BackBufferWidth, params.BackBufferHeight, SWP_NOREPOSITION | SWP_NOMOVE | SWP_FRAMECHANGED);
+            auto xmin = std::min_element(g::cfg.cameras.cbegin(), g::cfg.cameras.cend(), [](const auto& a, const auto& b) { return a.extent[0] < b.extent[0]; })->extent[0];
+            SetWindowPos(g::main_window, HWND_TOP, xmin, 0, params.BackBufferWidth, params.BackBufferHeight, SWP_NOREPOSITION | SWP_FRAMECHANGED);
             window_resized = true;
         }
 
