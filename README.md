@@ -1,6 +1,8 @@
 # openRBRTriples
 
-Open source true triple screen plugin for Richard Burns Rally. Based on [openRBRVR](https://github.com/Detegr/openRBRVR). Designed to be used with the [RSF plugin](https://rallysimfans.hu).
+Open source true triple screen plugin for Richard Burns Rally. Based on
+[openRBRVR](https://github.com/Detegr/openRBRVR). Designed to be used with the
+[RSF plugin](https://rallysimfans.hu).
 
 ## License
 

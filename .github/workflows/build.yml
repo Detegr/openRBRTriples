@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - '*'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -36,13 +37,17 @@ jobs:
     - name: Build
       run: cmake --build build --config RelWithDebInfo
 
-    - name: Upload artifacts
+    - name: Upload openRBRTriples.dll
       uses: actions/upload-artifact@v4
       with:
-        name: openRBRTriples
-        path: |
-          build\RelWithDebInfo\openRBRTriples.dll
-          build\RelWithDebInfo\openRBRTriples.pdb
+        name: openRBRTriples.dll
+        path: build\RelWithDebInfo\openRBRTriples.dll
+
+    - name: Upload openRBRTriples.pdb
+      uses: actions/upload-artifact@v4
+      with:
+        name: openRBRTriples.pdb
+        path: build\RelWithDebInfo\openRBRTriples.pdb
 
   release:
     runs-on: ubuntu-latest
@@ -58,7 +63,7 @@ jobs:
     - name: Download openRBRTriples artifact
       uses: actions/download-artifact@v4
       with:
-        name: openRBRTriples
+        name: openRBRTriples.dll
 
     - name: Create changelog
       id: changelog
@@ -100,13 +105,4 @@ jobs:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_name: openRBRTriples-${{ github.ref_name }}.zip
         asset_path: openRBRTriples-${{ github.ref_name }}.zip
-
-    - name: Upload openRBRTriples.pdb
-      id: upload_pdb
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_name: openRBRTriples.pdb
-        asset_path: openRBRTriples.pdb
+        asset_content_type: application/zip
