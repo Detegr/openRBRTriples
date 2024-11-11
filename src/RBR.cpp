@@ -1,8 +1,10 @@
 #include "RBR.hpp"
 #include "Dx.hpp"
 #include "Globals.hpp"
+#include "UI.hpp"
 #include "Util.hpp"
 
+#include <numeric>
 #include <ranges>
 
 // Compilation unit global variables
@@ -13,7 +15,7 @@ namespace g {
     static rbr::GameMode game_mode;
     static rbr::GameMode previous_game_mode;
     static uint32_t current_stage_id;
-    static bool is_rendering_3d;
+    static bool is_rendering;
 }
 
 namespace rbr {
@@ -39,7 +41,7 @@ namespace rbr {
         return addr;
     }
 
-    static uintptr_t get_address(uintptr_t target)
+    uintptr_t get_address(uintptr_t target)
     {
         constexpr uintptr_t RBR_ABSOLUTE_LOAD_ADDR = 0x400000;
         return get_base_address() + target - RBR_ABSOLUTE_LOAD_ADDR;
@@ -51,6 +53,7 @@ namespace rbr {
         return get_hedgehog_base_address() + target - HEDGEHOG_ABSOLUTE_LOAD_ADDR;
     }
 
+    static uintptr_t WNDPROC_ADDR = get_address(0x447AB0);
     static uintptr_t RENDER_FUNCTION_ADDR = get_address(0x47E1E0);
     static uintptr_t CAR_INFO_ADDR = get_address(0x165FC68);
     static uintptr_t* GAME_MODE_EXT_2_PTR = reinterpret_cast<uintptr_t*>(get_address(0x007EA678));
@@ -62,6 +65,11 @@ namespace rbr {
     static PrepareCameraFn apply_camera_position = reinterpret_cast<PrepareCameraFn>(get_address(0x4825B0));
     static PrepareCameraFn apply_camera_fov = reinterpret_cast<PrepareCameraFn>(get_address(0x4BF690));
     static PostPrepareCameraFn post_prepare_camera = reinterpret_cast<PostPrepareCameraFn>(get_address(0x487320));
+
+    uintptr_t get_wndproc_addr()
+    {
+        return WNDPROC_ADDR;
+    }
 
     uintptr_t get_render_function_addr()
     {
@@ -83,9 +91,9 @@ namespace rbr {
         return is_on_btb_stage() && g::game_mode == GameMode::Loading;
     }
 
-    bool is_rendering_3d()
+    bool is_rendering()
     {
-        return g::is_rendering_3d;
+        return g::is_rendering;
     }
 
     bool is_using_cockpit_camera()
@@ -125,7 +133,7 @@ namespace rbr {
 
     // Read camera FoV from the currently selected RBR camera
     // and recreate the projection matrix with the correct FoV
-    void update_current_camera_fov(uintptr_t p)
+    float* update_current_camera_fov(uintptr_t p)
     {
         float* original_fov_ptr;
         float* current_fov_ptr = reinterpret_cast<float*>(p + 0x70 + 0x2c0);
@@ -151,7 +159,7 @@ namespace rbr {
         }
 
         if (*original_fov_ptr == 0.0) {
-            return;
+            return original_fov_ptr;
         }
 
         float original_fov_ptr_value = *original_fov_ptr;
@@ -171,16 +179,30 @@ namespace rbr {
 
         // Re-calculate the correct angle for the new FoV for the side views
         for (size_t i = 0; i < g::cfg.cameras.size(); ++i) {
-            auto cfov = fov + static_cast<float>(g::cfg.cameras[i].fov);
-            g::projection_matrix[i] = glm::perspectiveFovLH_ZO(
-                cfov,
-                static_cast<float>(g::cfg.cameras[0].w()),
-                static_cast<float>(g::cfg.cameras[0].h()),
-                *z_near_ptr, 10000.0f);
+            if (!g::cfg.cameras[i].has_value()) {
+                continue;
+            }
+
+            const auto znear = *z_near_ptr;
+            const auto aspect = static_cast<float>(g::cfg.cameras[Primary]->w()) / static_cast<float>(g::cfg.cameras[Primary]->h());
+
+            float const tanHalfFov = glm::tan(0.5f * fov);
+            float const top = tanHalfFov * znear;
+            float const bottom = -top;
+            float right = top * aspect;
+            float left = -right;
+
+            if (i == RenderTarget::Right) {
+                left += static_cast<float>(g::cfg.cameras[i]->fov_adjustment);
+            }
+            if (i == RenderTarget::Left) {
+                right += static_cast<float>(g::cfg.cameras[i]->fov_adjustment);
+            }
+
+            g::projection_matrix[i] = glm::frustumLH_ZO(left, right, bottom, top, znear, 10000.0f);
 
             if (i != RenderTarget::Primary) {
-                const auto aspect = static_cast<double>(g::cfg.cameras[0].w()) / static_cast<double>(g::cfg.cameras[0].h());
-                g::cfg.cameras[i].angle = 2.0 * std::atan(std::tan(fov / 2.0) * aspect);
+                g::calculated_screen_angle[i] = 2.0f * std::atan(std::tan(fov / 2.0f) * aspect);
             }
         }
 
@@ -227,6 +249,8 @@ namespace rbr {
 
             *current_fov_ptr = original_fov_ptr_value;
         }
+
+        return original_fov_ptr;
     }
 
     static bool init_or_update_game_data(uintptr_t ptr)
@@ -235,7 +259,8 @@ namespace rbr {
         if (!window_resized) [[unlikely]] {
             D3DPRESENT_PARAMETERS params;
             g::swapchain->GetPresentParameters(&params);
-            auto xmin = std::min_element(g::cfg.cameras.cbegin(), g::cfg.cameras.cend(), [](const auto& a, const auto& b) { return a.extent[0] < b.extent[0]; })->extent[0];
+            const auto valid_cameras = g::cfg.cameras | std::views::filter([](const auto& cam) { return cam.has_value(); }) | std::ranges::to<std::vector>();
+            const auto xmin = (*std::min_element(valid_cameras.cbegin(), valid_cameras.cend(), [](const auto& a, const auto& b) { return a->x() < b->x(); }))->x();
             SetWindowPos(g::main_window, HWND_TOP, xmin, 0, params.BackBufferWidth, params.BackBufferHeight, SWP_NOREPOSITION | SWP_FRAMECHANGED);
             window_resized = true;
         }
@@ -256,8 +281,12 @@ namespace rbr {
 
         auto should_draw = *reinterpret_cast<uint32_t*>(ptr + 0x720) == 0;
 
-        if (should_draw && (g::game_mode == GameMode::MainMenu || g::game_mode == GameMode::Driving || g::game_mode == GameMode::Replay || g::game_mode == Pause || g::game_mode == PreStage)) {
-            update_current_camera_fov(ptr);
+        if (should_draw && (g::game_mode == GameMode::MainMenu || g::game_mode == GameMode::Driving || g::game_mode == GameMode::Replay || g::game_mode == GameMode::Pause || g::game_mode == GameMode::PreStage)) {
+            g::current_fov_ptr = update_current_camera_fov(ptr);
+            if (g::current_fov_ptr && g::game_mode == GameMode::Driving) {
+                ui::draw();
+                ui::tick();
+            }
         }
 
         return should_draw;
@@ -268,34 +297,32 @@ namespace rbr {
     {
         auto do_rendering = init_or_update_game_data(reinterpret_cast<uintptr_t>(p));
 
-        if (g::d3d_dev->GetRenderTarget(0, &g::original_render_target) != D3D_OK) [[unlikely]] {
-            dbg("Could not get render original target");
-        }
-        if (g::d3d_dev->GetDepthStencilSurface(&g::original_depth_stencil_target) != D3D_OK) [[unlikely]] {
-            dbg("Could not get render original depth stencil surface");
-        }
-
         if (!do_rendering) [[unlikely]] {
             return;
         }
 
-        g::is_rendering_3d = true;
-
         static RenderTarget render_target_to_skip = RenderTarget::Left;
 
+        g::is_rendering = true;
+
         for (const auto& [i, c] : std::views::enumerate(g::cfg.cameras)) {
+            if (!c.has_value()) {
+                continue;
+            }
+
             if (g::cfg.side_monitors_half_hz && i == render_target_to_skip) {
                 if (!g::cfg.side_monitors_half_hz_btb_only || (g::cfg.side_monitors_half_hz_btb_only && rbr::is_on_btb_stage())) {
                     continue;
                 }
             }
+
             dx::set_render_target(static_cast<RenderTarget>(i));
             g::hooks::render.call(p);
         };
 
         render_target_to_skip = (render_target_to_skip == RenderTarget::Right) ? RenderTarget::Left : RenderTarget::Right;
         dx::set_render_target(RenderTarget::Primary, false);
-        g::is_rendering_3d = false;
+        g::is_rendering = false;
     }
 }
 

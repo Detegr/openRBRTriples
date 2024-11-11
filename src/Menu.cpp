@@ -41,7 +41,7 @@ void Toggle(int& value)
     }
 }
 
-static void toggle_side_monitor_setting(bool forward)
+void toggle_side_monitor_setting(bool forward)
 {
     if (g::cfg.side_monitors_half_hz) {
         if (g::cfg.side_monitors_half_hz_btb_only) {

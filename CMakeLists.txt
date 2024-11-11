@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.5)
+set(CMAKE_SYSTEM_VERSION 123)
 
 project(openRBRTriples)
 
@@ -11,13 +12,22 @@ set(SOURCES
     "src/Menu.cpp"
     "src/RBR.cpp"
     "src/RenderTarget.cpp"
+    "src/UI.cpp"
     "src/openRBRTriples.cpp"
+
+    "thirdparty/imgui-1.91.5/imgui.cpp"
+    "thirdparty/imgui-1.91.5/imgui_draw.cpp"
+    "thirdparty/imgui-1.91.5/imgui_tables.cpp"
+    "thirdparty/imgui-1.91.5/imgui_widgets.cpp"
+    "thirdparty/imgui-1.91.5/backends/imgui_impl_dx9.cpp"
+    "thirdparty/imgui-1.91.5/backends/imgui_impl_win32.cpp"
 )
 
 set(HEADERS
     "src/Config.hpp"
     "src/D3D.hpp"
     "src/Dx.hpp"
+    "src/Font.hpp"
     "src/Globals.hpp"
     "src/Hook.hpp"
     "src/IPlugin.h"
@@ -25,14 +35,17 @@ set(HEADERS
     "src/Menu.hpp"
     "src/RBR.hpp"
     "src/RenderTarget.hpp"
+    "src/UI.hpp"
     "src/Util.hpp"
     "src/openRBRTriples.def"
     "src/openRBRTriples.hpp"
+
+    "thirdparty/imgui-1.91.5/imgui.h"
 )
 
 set(openRBRTriples_Major 0)
-set(openRBRTriples_Minor 2)
-set(openRBRTriples_Patch 2)
+set(openRBRTriples_Minor 3)
+set(openRBRTriples_Patch 0)
 set(openRBRTriples_Tweak 0)
 #set(openRBRTriples_TweakStr "-beta${openRBRTriples_Tweak}")
 
@@ -49,12 +62,16 @@ configure_file(
 
 add_library(${PROJECT_NAME} SHARED ${SOURCES} ${HEADERS} ${CMAKE_CURRENT_BINARY_DIR}/version.rc)
 
+#set(CMAKE_C_COMPILER "C:\\Program Files\\bin\\clang.exe")
+#set(CMAKE_CXX_COMPILER "C:\\Program Files\\bin\\clang++.exe")
+#set_source_files_properties("src/UI.cpp" PROPERTIES COMPILE_FLAGS "/MDd")
 target_compile_options(${PROJECT_NAME} PRIVATE /arch:AVX)
-target_compile_definitions(${PROJECT_NAME} PRIVATE WIN32 _WINDOWS _USRDLL _MBCS)
+#target_compile_definitions(${PROJECT_NAME} PRIVATE WIN32 _WINDOWS _USRDLL)
 target_include_directories(${PROJECT_NAME} PRIVATE
     "${CMAKE_SOURCE_DIR}/thirdparty"
     "${CMAKE_SOURCE_DIR}/thirdparty/glm"
     "${CMAKE_SOURCE_DIR}/thirdparty/minhook/include"
+    "${CMAKE_SOURCE_DIR}/thirdparty/imgui-1.91.5"
     "${CMAKE_CURRENT_BINARY_DIR}"
 )
 target_link_directories(${PROJECT_NAME} PUBLIC

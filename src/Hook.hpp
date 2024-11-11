@@ -18,8 +18,8 @@ struct Hook {
     explicit Hook(T src, T tgt)
         : src(src)
     {
-        if (MH_CreateHook(reinterpret_cast<void*>(src), reinterpret_cast<void*>(tgt), reinterpret_cast<void**>(&call)) != MH_OK) {
-            throw std::runtime_error("Could not hook");
+        if (const auto ret = MH_CreateHook(reinterpret_cast<void*>(src), reinterpret_cast<void*>(tgt), reinterpret_cast<void**>(&call)); ret != MH_OK) {
+            throw std::runtime_error(std::format("Could not create a function hook, error {}", (int)ret));
         }
         enable();
     }

@@ -1,3 +1,2 @@
 LIBRARY openRBRTriples
-    EXPORTS
-        RBR_CreatePlugin
+    EXPORTS RBR_CreatePlugin

@@ -20,19 +20,22 @@ namespace rbr {
         Starting = 12,
     };
 
+    uintptr_t get_address(uintptr_t target);
+    uintptr_t get_wndproc_addr();
     uintptr_t get_render_function_addr();
     uintptr_t get_hedgehog_address(uintptr_t);
     GameMode get_game_mode();
     bool is_on_btb_stage();
     bool is_loading_btb_stage();
-    bool is_rendering_3d();
+    bool is_rendering();
     bool is_using_cockpit_camera();
     uint32_t get_current_stage_id();
 
-    void update_current_camera_fov(uintptr_t p);
+    float* update_current_camera_fov(uintptr_t p);
 
     // Hookable functions
     void __fastcall render(void* p);
+    void set_camera_target(void* a, float* cam_pos, float* cam_target);
 }
 
 namespace rbr_rx {

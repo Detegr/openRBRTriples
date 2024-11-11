@@ -1,6 +1,7 @@
 #pragma once
 
 #include "RenderTarget.hpp"
+#include "UI.hpp"
 #include <d3d9.h>
 
 namespace dx {
@@ -16,4 +17,5 @@ namespace dx {
     HRESULT __stdcall DrawIndexedPrimitive(IDirect3DDevice9* This, D3DPRIMITIVETYPE PrimitiveType, INT BaseVertexIndex, UINT MinVertexIndex, UINT NumVertices, UINT startIndex, UINT primCount);
     HRESULT __stdcall CreateDevice(IDirect3D9* This, UINT Adapter, D3DDEVTYPE DeviceType, HWND hFocusWindow, DWORD BehaviorFlags, D3DPRESENT_PARAMETERS* pPresentationParameters, IDirect3DDevice9** ppReturnedDeviceInterface);
     IDirect3D9* __stdcall Direct3DCreate9(UINT SDKVersion);
+    LRESULT CALLBACK wndproc(HWND hWindow, UINT uMsg, WPARAM wParam, LPARAM lParam);
 }

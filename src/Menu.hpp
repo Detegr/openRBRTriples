@@ -34,8 +34,8 @@ public:
     static constexpr std::tuple<float, float> menu_items_start_pos = std::make_tuple(65.0f, 70.0f);
 
     Menu(std::string heading, const std::vector<MenuEntry> entries)
-        : entry_idx(0)
-        , menu_heading(heading)
+        : menu_heading(heading)
+        , entry_idx(0)
         , menu_entries(entries)
     {
     }
@@ -150,6 +150,8 @@ public:
         return ret;
     }
 
-    float row_height() const { return licenseRowHeight; }
-    const int index() const { return -1; }
+    float row_height() const override { return licenseRowHeight; }
+    const int index() const override { return -1; }
 };
+
+void toggle_side_monitor_setting(bool forward);

@@ -12,11 +12,11 @@ namespace g {
     IDirect3DDevice9* d3d_dev;
     std::vector<IDirect3DVertexShader9*> base_game_shaders;
     std::optional<RenderTarget> current_render_target;
-    IDirect3DSurface9* original_render_target;
-    IDirect3DSurface9* original_depth_stencil_target;
     uint8_t* btb_track_status_ptr;
     M4 projection_matrix[3];
+    float calculated_screen_angle[3];
     IDirect3DSwapChain9* swapchain;
+    float* current_fov_ptr;
 
     namespace hooks {
         // DirectX functions
@@ -32,4 +32,6 @@ namespace g {
         // RBR functions
         Hook<decltype(&rbr::render)> render;
     }
+
+    struct nk_context* nk_context;
 }

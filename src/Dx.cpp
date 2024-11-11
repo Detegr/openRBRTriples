@@ -11,6 +11,7 @@
 // Compilation unit global variables
 namespace g {
     static std::vector<std::tuple<IDirect3DSurface9*, IDirect3DSurface9*>> surfaces;
+    WNDPROC wndproc;
 }
 
 namespace dx {
@@ -26,19 +27,10 @@ namespace dx {
 
     using rbr::GameMode;
 
-    LRESULT CALLBACK wnd_proc(HWND hWindow, UINT uMsg, WPARAM wParam, LPARAM lParam)
+    LRESULT CALLBACK wndproc(HWND hWindow, UINT uMsg, WPARAM wParam, LPARAM lParam)
     {
-        switch (uMsg) {
-            case WM_CLOSE:
-                DestroyWindow(hWindow);
-                break;
-            case WM_DESTROY:
-                PostQuitMessage(0);
-                break;
-            default:
-                return DefWindowProc(hWindow, uMsg, wParam, lParam);
-        }
-        return 0;
+        ui::wndproc(hWindow, uMsg, wParam, lParam);
+        return g::wndproc(hWindow, uMsg, wParam, lParam);
     }
 
     HRESULT __stdcall CreateVertexShader(IDirect3DDevice9* This, const DWORD* pFunction, IDirect3DVertexShader9** ppShader)
@@ -76,33 +68,62 @@ namespace dx {
 
     HRESULT __stdcall Present(IDirect3DDevice9* This, const RECT* pSourceRect, const RECT* pDestRect, HWND hDestWindowOverride, const RGNDATA* pDirtyRegion)
     {
-        if (g::d3d_dev->SetRenderTarget(0, g::original_render_target) != D3D_OK) {
-            dbg("Failed to reset render target to original");
-        }
-        if (g::d3d_dev->SetDepthStencilSurface(g::original_depth_stencil_target) != D3D_OK) {
-            dbg("Failed to reset depth stencil surface to original");
-        }
-        if (g::d3d_dev->Clear(0, nullptr, D3DCLEAR_STENCIL | D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, 0, 1.0, 0) != D3D_OK) {
-            dbg("Failed to clear surface");
-        }
-
         IDirect3DSurface9* back_buffer;
-        auto buf = g::swapchain->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &back_buffer);
-
-        auto xmin = std::min_element(g::cfg.cameras.cbegin(), g::cfg.cameras.cend(), [](const auto& a, const auto& b) { return a.extent[0] < b.extent[0]; })->extent[0];
-        for (const auto& [i, c] : std::views::enumerate(g::cfg.cameras)) {
-            RECT src = { c.crop.x, c.crop.y, c.crop.x + c.w(), c.crop.y + c.h() };
-            const auto dstx = c.extent[0] + std::abs(xmin);
-            RECT dst = { dstx, c.extent[1], dstx + c.w(), c.extent[1] + c.h() };
-            g::d3d_dev->StretchRect(std::get<0>(g::surfaces[i]), &src, back_buffer, &dst, D3DTEXF_NONE);
+        if (g::swapchain->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &back_buffer) != D3D_OK) {
+            return 0;
         }
+
+        ui::stop_input_capture();
+
+        for (const auto& [i, c] : std::views::enumerate(g::cfg.cameras)) {
+            if (!c.has_value()) {
+                continue;
+            }
+
+            // Primary (center) screen dictates the maximum width/height that can be used
+            RECT src = {
+                std::max(c->crop.x, 0),
+                std::max(c->crop.y, 0),
+                std::min(g::cfg.cameras[Primary]->w(), c->crop.x + c->w()),
+                std::min(g::cfg.cameras[Primary]->h(), c->crop.y + c->h())
+            };
+
+            const auto leftWidth = g::cfg.cameras[Left].and_then([](const auto &cam) { return std::optional(cam.w()); }).value_or(0);
+            const auto centerWidth = g::cfg.cameras[Primary].and_then([](const auto &cam) { return std::optional(cam.w()); }).value_or(0);
+
+            uint32_t dstx;
+            if (i == Left) {
+                dstx = 0;
+            } else if (i == Primary) {
+                dstx = leftWidth;
+            } else {
+                dstx = leftWidth + centerWidth;
+            }
+
+            RECT dst = { dstx, c->y(), dstx + c->w(), c->y() + c->h() };
+            if (const auto ret = g::d3d_dev->StretchRect(std::get<0>(g::surfaces[i]), &src, back_buffer, &dst, D3DTEXF_NONE); ret != D3D_OK) {
+                dbg(std::format("StretchRect #{} failed: {}", i, ret));
+                if (rbr::get_game_mode() == GameMode::Starting) {
+                    std::string screen_name;
+                    switch (i) {
+                        case Primary: screen_name = "middle"; break;
+                        case Left: screen_name = "left"; break;
+                        case Right: screen_name = "right"; break;
+                        default: screen_name = "unknown"; break;
+                    }
+                    MessageBoxA(nullptr, std::format("Unable to draw the screens correctly. Please check the validity of openRBRTriples.toml\nThe issue occurred with {} screen", screen_name).c_str(), "Screen configuration error", MB_OK);
+                    throw std::runtime_error("Screen configuration error");
+                }
+            }
+        }
+
+        ui::present(back_buffer);
+
         back_buffer->Release();
 
         auto ret = g::swapchain->Present(nullptr, nullptr, nullptr, nullptr, 0);
 
-        g::original_render_target->Release();
-        g::original_depth_stencil_target->Release();
-
+        ui::capture_input();
         return ret;
     }
 
@@ -110,27 +131,18 @@ namespace dx {
     {
         float angle = 0.0;
         auto main_menu_camera_tweak = glm::identity<M4>();
-        if (rbr::is_rendering_3d()) {
+        if (rbr::is_rendering()) {
             if (rbr::get_game_mode() == GameMode::MainMenu) {
                 // The main menu camera looks weird. This is an attempt to make it look like normal.
                 main_menu_camera_tweak = glm::translate(glm::mat4x4(1.0f), glm::vec3(0, -1.5f, 2.0f)) * glm::mat4_cast(glm::angleAxis(glm::radians(-20.0f), glm::vec3 { 1, 0, 0 }));
             }
-            angle = static_cast<float>(g::cfg.cameras[g::current_render_target.value()].angle);
-            angle += static_cast<float>(glm::radians(g::cfg.cameras[g::current_render_target.value()].angle_adjustment));
+            angle = static_cast<float>(g::calculated_screen_angle[g::current_render_target.value()]);
+            angle += static_cast<float>(glm::radians(g::cfg.cameras[g::current_render_target.value()]->angle_adjustment));
             if (g::current_render_target.value() == RenderTarget::Right) {
                 angle = -angle;
             }
         }
         return glm::rotate(glm::identity<M4>(), angle, { 0, 1, 0 }) * main_menu_camera_tweak;
-    }
-
-    static M4 get_translation_matrix()
-    {
-        if (rbr::is_rendering_3d()) {
-            return glm::translate(glm::identity<M4>(), g::cfg.cameras[g::current_render_target.value()].translation);
-        } else {
-            return glm::identity<M4>();
-        }
     }
 
     HRESULT __stdcall SetVertexShaderConstantF(IDirect3DDevice9* This, UINT StartRegister, const float* pConstantData, UINT Vector4fCount)
@@ -152,12 +164,12 @@ namespace dx {
             if (StartRegister == 0) {
                 const auto orig = glm::transpose(m4_from_shader_constant_ptr(pConstantData));
                 const auto mv = shader::current_projection_matrix_inverse * orig;
-                const auto mvp = glm::transpose(g::projection_matrix[g::current_render_target.value_or(RenderTarget::Primary)] * get_translation_matrix() * get_rotation_matrix() * mv);
+                const auto mvp = glm::transpose(g::projection_matrix[g::current_render_target.value_or(RenderTarget::Primary)] * get_rotation_matrix() * mv);
                 return g::hooks::set_vertex_shader_constant_f.call(g::d3d_dev, StartRegister, glm::value_ptr(mvp), Vector4fCount);
             } else if (StartRegister == 20) {
                 // Sky/fog
                 const auto orig = glm::transpose(m4_from_shader_constant_ptr(pConstantData));
-                const auto m = glm::transpose(get_translation_matrix() * get_rotation_matrix() * orig);
+                const auto m = glm::transpose(get_rotation_matrix() * orig);
                 return g::hooks::set_vertex_shader_constant_f.call(g::d3d_dev, StartRegister, glm::value_ptr(m), Vector4fCount);
             }
         }
@@ -166,13 +178,13 @@ namespace dx {
 
     HRESULT __stdcall SetTransform(IDirect3DDevice9* This, D3DTRANSFORMSTATETYPE State, const D3DMATRIX* pMatrix)
     {
-        if (rbr::is_rendering_3d() && State == D3DTS_PROJECTION) {
+        if (rbr::is_rendering() && State == D3DTS_PROJECTION) {
             shader::current_projection_matrix = m4_from_d3d(*pMatrix);
             shader::current_projection_matrix_inverse = glm::inverse(shader::current_projection_matrix);
             fixedfunction::current_projection_matrix = d3d_from_m4(g::projection_matrix[g::current_render_target.value_or(RenderTarget::Primary)]);
             return g::hooks::set_transform.call(g::d3d_dev, State, &fixedfunction::current_projection_matrix);
-        } else if (rbr::is_rendering_3d() && State == D3DTS_VIEW) {
-            fixedfunction::current_view_matrix = d3d_from_m4(get_translation_matrix() * get_rotation_matrix() * m4_from_d3d(*pMatrix));
+        } else if (rbr::is_rendering() && State == D3DTS_VIEW) {
+            fixedfunction::current_view_matrix = d3d_from_m4(get_rotation_matrix() * m4_from_d3d(*pMatrix));
             return g::hooks::set_transform.call(g::d3d_dev, State, &fixedfunction::current_view_matrix);
         }
 
@@ -229,34 +241,15 @@ namespace dx {
 
         const auto w = pPresentationParameters->BackBufferWidth;
         const auto h = pPresentationParameters->BackBufferHeight;
-        g::cfg = g::saved_cfg = Config::from_path("Plugins", { 0, 0, w, h });
-
-        auto windowClass = "window";
-        HINSTANCE instance = GetModuleHandleA(nullptr);
-        WNDCLASS wnd = {};
-        wnd.lpfnWndProc = wnd_proc;
-        wnd.hInstance = instance;
-        wnd.lpszClassName = windowClass;
-        RegisterClassA(&wnd);
+        try {
+			g::cfg = g::saved_cfg = Config::from_path("Plugins", { 0, 0, w, h });
+        } catch (const std::runtime_error& e) {
+            dbg(e.what());
+            MessageBoxA(hFocusWindow, e.what(), "Config error", MB_OK);
+        }
 
         RECT rect = {};
         GetWindowRect(hFocusWindow, &rect);
-
-        for (size_t i = 0; i < g::cfg.cameras.size(); ++i) {
-            if (i == RenderTarget::Primary) {
-                g::cfg.cameras[i].w() = w;
-                g::cfg.cameras[i].h() = h;
-                continue;
-            }
-
-            auto x = g::cfg.cameras[i].x();
-            auto y = g::cfg.cameras[i].y();
-            auto winw = g::cfg.cameras[i].w() == 0 ? g::cfg.cameras[0].w() : g::cfg.cameras[i].w();
-            auto winh = g::cfg.cameras[i].h() == 0 ? g::cfg.cameras[0].h() : g::cfg.cameras[i].h();
-
-            g::cfg.cameras[i].w() = winw;
-            g::cfg.cameras[i].h() = winh;
-        }
 
         auto devvtbl = get_vtable<IDirect3DDevice9Vtbl>(dev);
         try {
@@ -276,6 +269,10 @@ namespace dx {
         g::surfaces.resize(g::cfg.cameras.size());
         auto total_width = 0;
         for (const auto& [i, c] : std::views::enumerate(g::cfg.cameras)) {
+            if (!c.has_value()) {
+                continue;
+            }
+
             auto msaa = pPresentationParameters->MultiSampleType;
             if (g::cfg.aa_center_screen_only && i != RenderTarget::Primary) {
                 msaa = D3DMULTISAMPLE_NONE;
@@ -290,16 +287,16 @@ namespace dx {
                 pPresentationParameters->BackBufferFormat,
                 pPresentationParameters->AutoDepthStencilFormat,
                 msaa,
-                g::cfg.cameras[0].w(),
-                g::cfg.cameras[0].h());
+                g::cfg.cameras[Primary]->w(),
+                g::cfg.cameras[Primary]->h());
 
             // Calculate total_width for creating a swapchain for a large (combined width) window
-            total_width += g::cfg.cameras[i].w();
+            total_width += g::cfg.cameras[i]->w();
         }
 
         pPresentationParameters->hDeviceWindow = g::main_window;
         pPresentationParameters->BackBufferWidth = total_width;
-        pPresentationParameters->BackBufferHeight = g::cfg.cameras[0].h();
+        pPresentationParameters->BackBufferHeight = g::cfg.cameras[Primary]->h();
 
         ret = dev->CreateAdditionalSwapChain(pPresentationParameters, &g::swapchain);
         if (FAILED(ret)) {
@@ -321,6 +318,10 @@ namespace dx {
                 MessageBoxA(hFocusWindow, e.what(), "Hooking failed", MB_OK);
             }
         }
+
+        g::wndproc = reinterpret_cast<WNDPROC>(rbr::get_wndproc_addr());
+        reinterpret_cast<WNDPROC>(SetWindowLongPtrA(hFocusWindow, GWLP_WNDPROC, reinterpret_cast<uintptr_t>(wndproc)));
+        ui::init(hFocusWindow, *ppReturnedDeviceInterface, pPresentationParameters->BackBufferWidth, pPresentationParameters->BackBufferHeight);
 
         return ret;
     }

@@ -48,20 +48,20 @@ namespace g {
     // Current render target, if any
     extern std::optional<RenderTarget> current_render_target;
 
-    // Original RBR screen render target
-    extern IDirect3DSurface9* original_render_target;
-
-    // Original RBR screen depth/stencil target
-    extern IDirect3DSurface9* original_depth_stencil_target;
-
     // Pointer to BTB track status information. Non-zero if a BTB stage is loaded.
     extern uint8_t* btb_track_status_ptr;
 
     // Custom projection matrix used by the plugin
     extern M4 projection_matrix[3];
 
+    // Screen angles
+    extern float calculated_screen_angle[3];
+
     // Swapchain used to render all windows into one
     extern IDirect3DSwapChain9* swapchain;
+
+    // Pointer to the current FoV (in degrees), might be null
+    extern float* current_fov_ptr;
 
     // Hooks to DirectX and RBR functions
     namespace hooks {
@@ -78,4 +78,6 @@ namespace g {
         // RBR functions
         extern Hook<decltype(&rbr::render)> render;
     }
+
+    extern struct nk_context* nk_context;
 }
