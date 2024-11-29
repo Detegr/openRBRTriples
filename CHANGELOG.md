@@ -1,3 +1,10 @@
+## 0.3.0
+
+- Implement in-game menu for adjusting triple screen settings
+- Implement side view skew using asymmetric frustum
+- Add support for double screen setups
+- Improve robustness of screen configurations
+
 ## 0.2.2
 
 - Fix a bug where wiper animations were not working correctly.
