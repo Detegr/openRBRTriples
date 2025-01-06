@@ -56,85 +56,87 @@ namespace ui {
             }
         }
 
-        if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
-            if (selected_row == 0) {
-                selected_row = row_count - 1;
-            } else {
-                selected_row--;
+        if (show_on_camera > 0) {
+            if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
+                if (selected_row == 0) {
+                    selected_row = row_count - 1;
+                } else {
+                    selected_row--;
+                }
             }
-        }
 
-        if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
-            if (selected_row == row_count - 1) {
-                selected_row = 0;
-            } else {
-                selected_row++;
+            if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
+                if (selected_row == row_count - 1) {
+                    selected_row = 0;
+                } else {
+                    selected_row++;
+                }
             }
-        }
 
-        const bool has_left = g::cfg.cameras[Left].has_value();
-        const bool has_right = g::cfg.cameras[Right].has_value();
+            const bool has_left = g::cfg.cameras[Left].has_value();
+            const bool has_right = g::cfg.cameras[Right].has_value();
 
-        if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) {
-            switch (selected_row) {
-                case 1:
-                    if (has_left)
-                        g::cfg.cameras[Left]->fov_adjustment -= 0.001;
-                    break;
-                case 2:
-                    if (has_left)
-                        g::cfg.cameras[Left]->angle_adjustment -= 0.1;
-                    break;
-                case 3:
-                    if (has_right)
-                        g::cfg.cameras[Right]->fov_adjustment -= 0.001;
-                    break;
-                case 4:
-                    if (has_right)
-                        g::cfg.cameras[Right]->angle_adjustment -= 0.1;
-                    break;
-                case 5:
-                    toggle_side_monitor_setting(false);
-                    break;
-                default:
-                    break;
+            if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) {
+                switch (selected_row) {
+                    case 1:
+                        if (has_left)
+                            g::cfg.cameras[Left]->fov_adjustment -= 0.001;
+                        break;
+                    case 2:
+                        if (has_left)
+                            g::cfg.cameras[Left]->angle_adjustment -= 0.1;
+                        break;
+                    case 3:
+                        if (has_right)
+                            g::cfg.cameras[Right]->fov_adjustment -= 0.001;
+                        break;
+                    case 4:
+                        if (has_right)
+                            g::cfg.cameras[Right]->angle_adjustment -= 0.1;
+                        break;
+                    case 5:
+                        toggle_side_monitor_setting(false);
+                        break;
+                    default:
+                        break;
+                }
             }
-        }
 
-        if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
-            switch (selected_row) {
-                case 1:
-                    if (has_left)
-                        g::cfg.cameras[Left]->fov_adjustment += 0.001;
-                    break;
-                case 2:
-                    if (has_left)
-                        g::cfg.cameras[Left]->angle_adjustment += 0.1;
-                    break;
-                case 3:
-                    if (has_right)
-                        g::cfg.cameras[Right]->fov_adjustment += 0.001;
-                    break;
-                case 4:
-                    if (has_right)
-                        g::cfg.cameras[Right]->angle_adjustment += 0.1;
-                    break;
-                case 5:
-                    toggle_side_monitor_setting(true);
-                    break;
-                case 6:
-                    if (g::cfg.write("Plugins\\openRBRTriples.toml")) {
-                        g::saved_cfg = g::cfg;
-                    }
-                    break;
-                default:
-                    break;
+            if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
+                switch (selected_row) {
+                    case 1:
+                        if (has_left)
+                            g::cfg.cameras[Left]->fov_adjustment += 0.001;
+                        break;
+                    case 2:
+                        if (has_left)
+                            g::cfg.cameras[Left]->angle_adjustment += 0.1;
+                        break;
+                    case 3:
+                        if (has_right)
+                            g::cfg.cameras[Right]->fov_adjustment += 0.001;
+                        break;
+                    case 4:
+                        if (has_right)
+                            g::cfg.cameras[Right]->angle_adjustment += 0.1;
+                        break;
+                    case 5:
+                        toggle_side_monitor_setting(true);
+                        break;
+                    case 6:
+                        if (g::cfg.write("Plugins\\openRBRTriples.toml")) {
+                            g::saved_cfg = g::cfg;
+                        }
+                        break;
+                    default:
+                        break;
+                }
             }
-        }
 
-        if (ImGui::IsKeyPressed(ImGuiKey_Enter) && selected_row == 6) {
-            if (g::cfg.write("Plugins\\openRBRTriples.toml")) {
-                g::saved_cfg = g::cfg;
+            if (ImGui::IsKeyPressed(ImGuiKey_Enter) && selected_row == 6) {
+                if (g::cfg.write("Plugins\\openRBRTriples.toml")) {
+                    g::saved_cfg = g::cfg;
+                }
             }
         }
     }
