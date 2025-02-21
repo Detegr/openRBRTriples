@@ -41,11 +41,12 @@ set(HEADERS
     "src/openRBRTriples.hpp"
 
     "thirdparty/imgui-1.91.5/imgui.h"
+    "thirdparty/inicpp.h"
 )
 
 set(openRBRTriples_Major 0)
 set(openRBRTriples_Minor 3)
-set(openRBRTriples_Patch 0)
+set(openRBRTriples_Patch 1)
 set(openRBRTriples_Tweak 0)
 #set(openRBRTriples_TweakStr "-beta${openRBRTriples_Tweak}")
 

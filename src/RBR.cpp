@@ -10,11 +10,13 @@
 // Compilation unit global variables
 namespace g {
     static uint32_t* camera_type_ptr;
+    static uint32_t* car_id_ptr;
     static uint32_t* stage_id_ptr;
 
     static rbr::GameMode game_mode;
     static rbr::GameMode previous_game_mode;
     static uint32_t current_stage_id;
+    static uint32_t current_camera_id;
     static bool is_rendering;
 }
 
@@ -186,20 +188,21 @@ namespace rbr {
             const auto znear = *z_near_ptr;
             const auto aspect = static_cast<float>(g::cfg.cameras[Primary]->w()) / static_cast<float>(g::cfg.cameras[Primary]->h());
 
-            float const tanHalfFov = glm::tan(0.5f * fov);
-            float const top = tanHalfFov * znear;
-            float const bottom = -top;
+            const float tanHalfFov = glm::tan(0.5f * fov);
+            const float top = tanHalfFov * znear;
+            const float bottom = -top;
             float right = top * aspect;
             float left = -right;
 
             if (i == RenderTarget::Right) {
-                left += static_cast<float>(g::cfg.cameras[i]->fov_adjustment);
+                left += static_cast<float>(g::cfg.cameras[i]->fov_adjustment) * znear;
             }
             if (i == RenderTarget::Left) {
-                right += static_cast<float>(g::cfg.cameras[i]->fov_adjustment);
+                right += static_cast<float>(g::cfg.cameras[i]->fov_adjustment) * znear;
             }
 
-            g::projection_matrix[i] = glm::frustumLH_ZO(left, right, bottom, top, znear, 10000.0f);
+            const auto yoffs = znear * (g::cfg.horizon_adjustment.value_or(0.0f) + static_cast<float>(g::cfg.cameras[i]->horizon_adjustment));
+            g::projection_matrix[i] = glm::frustumLH_ZO(left, right, bottom + yoffs, top + yoffs, znear, 10000.0f);
 
             if (i != RenderTarget::Primary) {
                 g::calculated_screen_angle[i] = 2.0f * std::atan(std::tan(fov / 2.0f) * aspect);
@@ -276,20 +279,49 @@ namespace rbr {
         }
 
         if (!g::stage_id_ptr) [[unlikely]] {
-            g::stage_id_ptr = reinterpret_cast<uint32_t*>(*reinterpret_cast<uintptr_t*>(*GAME_MODE_EXT_2_PTR + 0x70) + 0x20);
+            const auto game_mode_ext_2 = *reinterpret_cast<uintptr_t*>(*GAME_MODE_EXT_2_PTR + 0x70);
+            g::car_id_ptr = reinterpret_cast<uint32_t*>(game_mode_ext_2 + 0x1C);
+            g::stage_id_ptr = reinterpret_cast<uint32_t*>(game_mode_ext_2 + 0x20);
+        }
+
+        if (g::previous_game_mode != g::game_mode && (g::game_mode == GameMode::PreStage || g::game_mode == GameMode::Pause)) {
+            g::cfg.horizon_adjustment = std::nullopt;
+        }
+
+        bool camera_changed = false;
+        if (g::current_camera_id != *g::camera_type_ptr) {
+            g::current_camera_id = *g::camera_type_ptr;
+            camera_changed = true;
+        }
+
+        if (g::current_stage_id != *g::stage_id_ptr) {
+            g::current_stage_id = *g::stage_id_ptr;
+            g::cfg.horizon_adjustment = std::nullopt;
         }
 
         auto should_draw = *reinterpret_cast<uint32_t*>(ptr + 0x720) == 0;
-
         if (should_draw && (g::game_mode == GameMode::MainMenu || g::game_mode == GameMode::Driving || g::game_mode == GameMode::Replay || g::game_mode == GameMode::Pause || g::game_mode == GameMode::PreStage)) {
             g::current_fov_ptr = update_current_camera_fov(ptr);
             if (g::current_fov_ptr && g::game_mode == GameMode::Driving) {
                 ui::draw();
                 ui::tick();
             }
+
+            if (g::game_mode == GameMode::Driving && g::car_id_ptr && (!g::cfg.horizon_adjustment.has_value() || camera_changed)) {
+                g::cfg.horizon_adjustment = Config::load_horizon_adjustment(*g::car_id_ptr, g::current_camera_id);
+            }
         }
 
         return should_draw;
+    }
+
+    bool update_current_horizon_adjustment()
+    {
+        if (!g::car_id_ptr || !g::camera_type_ptr || !g::cfg.horizon_adjustment) {
+            return false;
+        }
+
+        return Config::insert_or_update_horizon_adjustment(*g::car_id_ptr, *g::camera_type_ptr, g::cfg.horizon_adjustment.value());
     }
 
     // RBR 3D scene draw function is rerouted here

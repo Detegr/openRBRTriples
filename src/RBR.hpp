@@ -32,6 +32,7 @@ namespace rbr {
     uint32_t get_current_stage_id();
 
     float* update_current_camera_fov(uintptr_t p);
+    bool update_current_horizon_adjustment();
 
     // Hookable functions
     void __fastcall render(void* p);

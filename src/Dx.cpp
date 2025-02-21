@@ -73,8 +73,6 @@ namespace dx {
             return 0;
         }
 
-        ui::stop_input_capture();
-
         for (const auto& [i, c] : std::views::enumerate(g::cfg.cameras)) {
             if (!c.has_value()) {
                 continue;
@@ -88,8 +86,8 @@ namespace dx {
                 std::min(g::cfg.cameras[Primary]->h(), c->crop.y + c->h())
             };
 
-            const auto leftWidth = g::cfg.cameras[Left].and_then([](const auto &cam) { return std::optional(cam.w()); }).value_or(0);
-            const auto centerWidth = g::cfg.cameras[Primary].and_then([](const auto &cam) { return std::optional(cam.w()); }).value_or(0);
+            const auto leftWidth = g::cfg.cameras[Left].and_then([](const auto& cam) { return std::optional(cam.w()); }).value_or(0);
+            const auto centerWidth = g::cfg.cameras[Primary].and_then([](const auto& cam) { return std::optional(cam.w()); }).value_or(0);
 
             uint32_t dstx;
             if (i == Left) {
@@ -123,7 +121,6 @@ namespace dx {
 
         auto ret = g::swapchain->Present(nullptr, nullptr, nullptr, nullptr, 0);
 
-        ui::capture_input();
         return ret;
     }
 
@@ -242,7 +239,7 @@ namespace dx {
         const auto w = pPresentationParameters->BackBufferWidth;
         const auto h = pPresentationParameters->BackBufferHeight;
         try {
-			g::cfg = g::saved_cfg = Config::from_path("Plugins", { 0, 0, w, h });
+            g::cfg = g::saved_cfg = Config::from_path("Plugins", { 0, 0, w, h });
         } catch (const std::runtime_error& e) {
             dbg(e.what());
             MessageBoxA(hFocusWindow, e.what(), "Config error", MB_OK);

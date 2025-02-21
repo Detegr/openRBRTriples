@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <ranges>
 #include <sstream>
 #include <string>
@@ -22,11 +23,14 @@
 #define TOML_HEADER_ONLY 1
 #include <toml.hpp>
 
+#include <inicpp.h>
+
 struct CameraConfig {
     glm::ivec4 extent;
     glm::ivec2 crop;
     double angle_adjustment;
     double fov_adjustment;
+    double horizon_adjustment;
 
     auto operator<=>(const CameraConfig&) const = default;
 
@@ -46,6 +50,7 @@ struct Config {
     bool aa_center_screen_only = true;
     bool side_monitors_half_hz = true;
     bool side_monitors_half_hz_btb_only = true;
+    std::optional<float> horizon_adjustment = std::nullopt;
 
     Config& operator=(const Config& rhs)
     {
@@ -85,6 +90,7 @@ struct Config {
                     { "cropy", cam.crop.y },
                     { "angle", cam.angle_adjustment },
                     { "fov", cam.fov_adjustment },
+                    { "horizon", cam.horizon_adjustment },
                 };
                 if (i == Primary)
                     cams.insert_or_assign("center", data);
@@ -122,6 +128,7 @@ struct Config {
             crop,
             tbl["angle"].value_or(0.0),
             tbl["fov"].value_or(0.0),
+            tbl["horizon"].value_or(0.0),
         };
     }
 
@@ -190,7 +197,7 @@ struct Config {
             cfg.cameras.emplace_back(CameraConfig {
                 defaultExtent,
                 { 0, 0 },
-                0, 0 });
+                0, 0, 0 });
         }
 
         cfg.valid_cameras = cfg.cameras | std::views::filter([](const auto& cam) { return cam.has_value(); }) | std::ranges::to<std::vector<std::reference_wrapper<std::optional<CameraConfig>>>>();
@@ -202,5 +209,101 @@ struct Config {
     static Config from_path(const std::filesystem::path& path, glm::ivec4 defaultExtent)
     {
         return from_toml(path / "openRBRTriples.toml", defaultExtent);
+    }
+
+    static std::optional<std::string> to_string(const std::filesystem::path& p)
+    {
+        return p.generic_string();
+    }
+
+    static std::optional<std::filesystem::path> resolve_car_ini_path(uint32_t car_id)
+    {
+        auto cars_ini_path = "Cars\\cars.ini";
+        if (!std::filesystem::exists(cars_ini_path)) {
+            dbg("Could not resolve car ini path");
+            return std::nullopt;
+        }
+
+        try {
+            ini::IniFile cars_ini(cars_ini_path);
+            auto car_key = std::format("Car0{}", car_id);
+            return std::filesystem::path(cars_ini[car_key]["IniFile"].as<std::string>()
+                | std::ranges::views::filter([](char c) { return c != '"'; })
+                | std::ranges::to<std::string>());
+        } catch (...) {
+            dbg("Could not resolve car ini path");
+            return std::nullopt;
+        }
+    }
+
+    static std::optional<std::filesystem::path> resolve_personal_car_ini_path(uint32_t car_id)
+    {
+        auto ini_file_path = resolve_car_ini_path(car_id);
+        if (!ini_file_path) {
+            return std::nullopt;
+        }
+
+        auto personal_filename = ini_file_path.value().filename();
+        personal_filename.replace_extension("");
+        personal_filename += "_personal";
+        personal_filename.replace_extension(".ini");
+        ini_file_path.value().replace_filename(personal_filename);
+
+        return ini_file_path;
+    }
+
+    static bool insert_or_update_horizon_adjustment(uint32_t car_id, uint32_t camera_id, double horizon_adjustment)
+    {
+        auto camera_name = camera_id_to_personal_ini_camera_name(camera_id);
+        if (!camera_name) {
+            return false;
+        }
+
+        auto ini_path = resolve_personal_car_ini_path(car_id).and_then(to_string);
+        if (!ini_path) {
+            return false;
+        }
+
+        try {
+            ini::IniFile personal_ini(ini_path.value());
+            personal_ini[camera_name.value()]["openRBRTriples_horizonAdjustment"] = horizon_adjustment;
+            personal_ini.save(ini_path.value());
+        } catch (...) {
+            dbg("Updating horizon adjustment failed");
+            return false;
+        }
+
+        return true;
+    }
+
+    static float load_horizon_adjustment(uint32_t car_id, uint32_t camera_id)
+    {
+        auto camera_name = camera_id_to_personal_ini_camera_name(camera_id);
+        if (!camera_name) {
+            return 0.0f;
+        }
+
+        auto ini_path = resolve_personal_car_ini_path(car_id).and_then(to_string);
+        if (!ini_path) {
+            return 0.0f;
+        }
+
+        try {
+            ini::IniFile personal_ini(ini_path.value());
+            return personal_ini[camera_name.value()]["openRBRTriples_horizonAdjustment"].as<float>();
+        } catch (...) {
+            return 0.0f;
+        }
+    }
+
+    static constexpr std::optional<std::string> camera_id_to_personal_ini_camera_name(uint32_t camera_id)
+    {
+        switch (camera_id) {
+            case 0x1: return "Cam_external";
+            case 0x3: return "Cam_bonnet";
+            case 0x4: return "Cam_bonnet2";
+            case 0x5: return "Cam_internal";
+            default: return std::nullopt;
+        }
     }
 };

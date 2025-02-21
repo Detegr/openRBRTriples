@@ -8,7 +8,5 @@ namespace ui {
     void tick();
     void draw();
     void present(IDirect3DSurface9* surface);
-    void capture_input();
-    void stop_input_capture();
     void wndproc(HWND hWindow, UINT uMsg, WPARAM wParam, LPARAM lParam);
 }

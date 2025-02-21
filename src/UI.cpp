@@ -24,6 +24,7 @@ namespace ui {
     static float x_pos = 0;
     static bool has_frame = false;
     static ImFontConfig font_cfg;
+    static bool horizon_adjustment_changed;
 
     void init(HWND wnd, IDirect3DDevice9* device, int width, int height)
     {
@@ -41,6 +42,17 @@ namespace ui {
         io.Fonts->AddFontFromMemoryTTF(font, font_size, 18.0, &font_cfg);
     }
 
+    static void update_config_files()
+    {
+        if (g::cfg.write("Plugins\\openRBRTriples.toml")) {
+            g::saved_cfg = g::cfg;
+        }
+        if (!rbr::update_current_horizon_adjustment()) {
+            dbg("Unable to update current horizon adjustment");
+        }
+        horizon_adjustment_changed = false;
+    }
+
     void tick()
     {
         if (ImGui::IsKeyPressed(ImGuiKey_F6, false)) {
@@ -56,7 +68,7 @@ namespace ui {
             }
         }
 
-        if (show_on_camera > 0) {
+        if (show_on_camera > 0 && rbr::get_game_mode() != rbr::GameMode::MainMenu) {
             if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
                 if (selected_row == 0) {
                     selected_row = row_count - 1;
@@ -78,21 +90,25 @@ namespace ui {
 
             if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) {
                 switch (selected_row) {
-                    case 1:
+                    case 0:
                         if (has_left)
                             g::cfg.cameras[Left]->fov_adjustment -= 0.001;
                         break;
-                    case 2:
+                    case 1:
                         if (has_left)
                             g::cfg.cameras[Left]->angle_adjustment -= 0.1;
                         break;
-                    case 3:
+                    case 2:
                         if (has_right)
                             g::cfg.cameras[Right]->fov_adjustment -= 0.001;
                         break;
-                    case 4:
+                    case 3:
                         if (has_right)
                             g::cfg.cameras[Right]->angle_adjustment -= 0.1;
+                        break;
+                    case 4:
+                        g::cfg.horizon_adjustment.value() -= 0.001f;
+                        horizon_adjustment_changed = true;
                         break;
                     case 5:
                         toggle_side_monitor_setting(false);
@@ -104,29 +120,31 @@ namespace ui {
 
             if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
                 switch (selected_row) {
-                    case 1:
+                    case 0:
                         if (has_left)
                             g::cfg.cameras[Left]->fov_adjustment += 0.001;
                         break;
-                    case 2:
+                    case 1:
                         if (has_left)
                             g::cfg.cameras[Left]->angle_adjustment += 0.1;
                         break;
-                    case 3:
+                    case 2:
                         if (has_right)
                             g::cfg.cameras[Right]->fov_adjustment += 0.001;
                         break;
-                    case 4:
+                    case 3:
                         if (has_right)
                             g::cfg.cameras[Right]->angle_adjustment += 0.1;
+                        break;
+                    case 4:
+                        g::cfg.horizon_adjustment.value() += 0.001f;
+                        horizon_adjustment_changed = true;
                         break;
                     case 5:
                         toggle_side_monitor_setting(true);
                         break;
                     case 6:
-                        if (g::cfg.write("Plugins\\openRBRTriples.toml")) {
-                            g::saved_cfg = g::cfg;
-                        }
+                        update_config_files();
                         break;
                     default:
                         break;
@@ -134,9 +152,7 @@ namespace ui {
             }
 
             if (ImGui::IsKeyPressed(ImGuiKey_Enter) && selected_row == 6) {
-                if (g::cfg.write("Plugins\\openRBRTriples.toml")) {
-                    g::saved_cfg = g::cfg;
-                }
+                update_config_files();
             }
         }
     }
@@ -158,7 +174,7 @@ namespace ui {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
         ImGui::PushStyleVarY(ImGuiStyleVar_WindowPadding, ImGui::GetStyle().WindowPadding.x * 2.0f);
         ImGui::SetNextWindowPos({ x_pos, 0 });
-        ImGui::SetNextWindowSize({ 400, 297.0 });
+        ImGui::SetNextWindowSize({ 600, row_count * 40.0f + 17.0f });
         ImGui::Begin("Window", nullptr, ImGuiWindowFlags_NoDecoration);
 
         constexpr ImVec4 s = { 0.70f, 0.168f, 0.168f, 1.0f };
@@ -171,31 +187,27 @@ namespace ui {
 
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(ImGui::GetStyle().ItemSpacing.x, item_height));
 
-        ImGui::Selectable(std::format("FoV for current camera {:.2f} deg", *g::current_fov_ptr).c_str(), selected_row == 0, ImGuiSelectableFlags_Disabled);
-        row_count = 1;
+        row_count = 0;
         {
             const bool disable = !g::cfg.cameras[Left].has_value();
             const ImGuiSelectableFlags flags = disable ? ImGuiSelectableFlags_Disabled : ImGuiSelectableFlags_None;
-            ImGui::Selectable(std::format("Fov adjustment left {:.3f}", disable ? 0.0 : g::cfg.cameras[Left]->fov_adjustment).c_str(), selected_row == 1, flags);
-            ImGui::Selectable(std::format("Bezel correction left {:.2f}", disable ? 0.0 : g::cfg.cameras[Left]->angle_adjustment).c_str(), selected_row == 2, flags);
-            row_count += 2;
+            ImGui::Selectable(std::format("Fov adjustment left {:.3f}", disable ? 0.0 : g::cfg.cameras[Left]->fov_adjustment).c_str(), selected_row == row_count++, flags);
+            ImGui::Selectable(std::format("Bezel correction left {:.2f}", disable ? 0.0 : g::cfg.cameras[Left]->angle_adjustment).c_str(), selected_row == row_count++, flags);
         }
         {
             const bool disable = !g::cfg.cameras[Right].has_value();
             const ImGuiSelectableFlags flags = disable ? ImGuiSelectableFlags_Disabled : ImGuiSelectableFlags_None;
-            ImGui::Selectable(std::format("Fov adjustment right {:.3f}", disable ? 0.0 : g::cfg.cameras[Right]->fov_adjustment).c_str(), selected_row == 3, flags);
-            ImGui::Selectable(std::format("Bezel correction right {:.2f}", disable ? 0.0 : g::cfg.cameras[Right]->angle_adjustment).c_str(), selected_row == 4, flags);
-            row_count += 2;
+            ImGui::Selectable(std::format("Fov adjustment right {:.3f}", disable ? 0.0 : g::cfg.cameras[Right]->fov_adjustment).c_str(), selected_row == row_count++, flags);
+            ImGui::Selectable(std::format("Bezel correction right {:.2f}", disable ? 0.0 : g::cfg.cameras[Right]->angle_adjustment).c_str(), selected_row == row_count++, flags);
         }
 
-        ImGui::Selectable(std::format("Run side monitors with half FPS: {}", g::cfg.side_monitors_half_hz ? (g::cfg.side_monitors_half_hz_btb_only ? "BTB only" : "ON") : "OFF").c_str(), selected_row == 5);
-        row_count += 1;
+        ImGui::Selectable(std::format("Horizon adjustment (car and camera specific) {:.3f}", g::cfg.horizon_adjustment.value_or(0.0f)).c_str(), selected_row == row_count++);
+        ImGui::Selectable(std::format("Run side monitors with half FPS: {}", g::cfg.side_monitors_half_hz ? (g::cfg.side_monitors_half_hz_btb_only ? "BTB only" : "ON") : "OFF").c_str(), selected_row == row_count++);
 
         {
-            const bool disable = g::cfg == g::saved_cfg;
+            const bool disable = g::cfg == g::saved_cfg && !horizon_adjustment_changed;
             const ImGuiSelectableFlags flags = disable ? ImGuiSelectableFlags_Disabled : ImGuiSelectableFlags_None;
-            ImGui::Selectable("Save current settings", selected_row == 6, flags);
-            row_count += 1;
+            ImGui::Selectable("Save current settings", selected_row == row_count++, flags);
         }
 
         ImGui::PopStyleColor(5);
@@ -221,14 +233,6 @@ namespace ui {
         g::d3d_dev->EndScene();
         g::d3d_dev->SetRenderTarget(0, nullptr);
         has_frame = false;
-    }
-
-    void capture_input()
-    {
-    }
-
-    void stop_input_capture()
-    {
     }
 
     void wndproc(HWND hWindow, UINT uMsg, WPARAM wParam, LPARAM lParam)
