@@ -1,7 +1,10 @@
 ## 0.3.2
 
+- Fix incompatibility with RBRHUD plugin that caused the car interior to be
+  rendered for each monitor
 - Make side view adjustment to not depend on the current FoV. Fixes issues with
-  the main menu.
+  the main menu. Will affect the existing settings again, please revisit the
+  side monitor settings if you have modified the side monitor FoV adjustment.
 
 ## 0.3.1
 
