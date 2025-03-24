@@ -1,3 +1,8 @@
+## 0.3.2
+
+- Make side view adjustment to not depend on the current FoV. Fixes issues with
+  the main menu.
+
 ## 0.3.1
 
 - Fix F6 menu receiving inputs even if it wasn't open. This caused all kinds of

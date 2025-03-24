@@ -92,7 +92,7 @@ namespace ui {
                 switch (selected_row) {
                     case 0:
                         if (has_left)
-                            g::cfg.cameras[Left]->fov_adjustment -= 0.001;
+                            g::cfg.cameras[Left]->fov_adjustment -= 0.01;
                         break;
                     case 1:
                         if (has_left)
@@ -100,7 +100,7 @@ namespace ui {
                         break;
                     case 2:
                         if (has_right)
-                            g::cfg.cameras[Right]->fov_adjustment -= 0.001;
+                            g::cfg.cameras[Right]->fov_adjustment -= 0.01;
                         break;
                     case 3:
                         if (has_right)
@@ -122,7 +122,7 @@ namespace ui {
                 switch (selected_row) {
                     case 0:
                         if (has_left)
-                            g::cfg.cameras[Left]->fov_adjustment += 0.001;
+                            g::cfg.cameras[Left]->fov_adjustment += 0.01;
                         break;
                     case 1:
                         if (has_left)
@@ -130,7 +130,7 @@ namespace ui {
                         break;
                     case 2:
                         if (has_right)
-                            g::cfg.cameras[Right]->fov_adjustment += 0.001;
+                            g::cfg.cameras[Right]->fov_adjustment += 0.01;
                         break;
                     case 3:
                         if (has_right)

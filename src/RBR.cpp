@@ -188,17 +188,18 @@ namespace rbr {
             const auto znear = *z_near_ptr;
             const auto aspect = static_cast<float>(g::cfg.cameras[Primary]->w()) / static_cast<float>(g::cfg.cameras[Primary]->h());
 
-            const float tanHalfFov = glm::tan(0.5f * fov);
-            const float top = tanHalfFov * znear;
+            const float top = glm::tan(0.5f * fov) * znear;
             const float bottom = -top;
-            float right = top * aspect;
-            float left = -right;
+            const float half_width = top * aspect;
+            const float width = half_width * 2;
+            float right = half_width;
+            float left = -half_width;
 
             if (i == RenderTarget::Right) {
-                left += static_cast<float>(g::cfg.cameras[i]->fov_adjustment) * znear;
+                left += static_cast<float>(g::cfg.cameras[i]->fov_adjustment) * width;
             }
             if (i == RenderTarget::Left) {
-                right += static_cast<float>(g::cfg.cameras[i]->fov_adjustment) * znear;
+                right += static_cast<float>(g::cfg.cameras[i]->fov_adjustment) * width;
             }
 
             const auto yoffs = znear * (g::cfg.horizon_adjustment.value_or(0.0f) + static_cast<float>(g::cfg.cameras[i]->horizon_adjustment));

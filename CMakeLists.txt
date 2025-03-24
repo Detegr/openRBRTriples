@@ -46,7 +46,7 @@ set(HEADERS
 
 set(openRBRTriples_Major 0)
 set(openRBRTriples_Minor 3)
-set(openRBRTriples_Patch 1)
+set(openRBRTriples_Patch 2)
 set(openRBRTriples_Tweak 0)
 #set(openRBRTriples_TweakStr "-beta${openRBRTriples_Tweak}")
 
