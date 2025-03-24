@@ -22,6 +22,7 @@ extern "C" __declspec(dllexport) IPlugin* RBR_CreatePlugin(IRBRGame* game)
 
 enum ApiOperations : uint64_t {
     API_VERSION = 0x0,
+    NOTIFY_VERTEX_SHADER = 0x1,
 };
 
 extern "C" __declspec(dllexport) int64_t openRBRTriples_Exec(ApiOperations ops, uint64_t value)
@@ -29,7 +30,15 @@ extern "C" __declspec(dllexport) int64_t openRBRTriples_Exec(ApiOperations ops, 
     dbg(std::format("Exec: {} {}", (uint64_t)ops, value));
 
     if (ops == API_VERSION) {
-        return 1;
+        return 2;
+    }
+
+    if (ops == NOTIFY_VERTEX_SHADER) {
+        const auto shader = reinterpret_cast<IDirect3DVertexShader9*>(value);
+        if (std::find(g::base_game_shaders.cbegin(), g::base_game_shaders.cend(), shader) == g::base_game_shaders.cend()) {
+            g::base_game_shaders.push_back(shader);
+        }
+        return 0;
     }
 
     return 0;
