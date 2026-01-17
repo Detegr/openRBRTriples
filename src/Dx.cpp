@@ -98,7 +98,7 @@ namespace dx {
                 dstx = leftWidth + centerWidth;
             }
 
-            RECT dst = { dstx, c->y(), dstx + c->w(), c->y() + c->h() };
+            RECT dst = { static_cast<LONG>(dstx), c->y(), static_cast<LONG>(dstx + c->w()), c->y() + c->h() };
             if (const auto ret = g::d3d_dev->StretchRect(std::get<0>(g::surfaces[i]), &src, back_buffer, &dst, D3DTEXF_NONE); ret != D3D_OK) {
                 dbg(std::format("StretchRect #{} failed: {}", i, ret));
                 if (rbr::get_game_mode() == GameMode::Starting) {
@@ -317,7 +317,7 @@ namespace dx {
         }
 
         g::wndproc = reinterpret_cast<WNDPROC>(rbr::get_wndproc_addr());
-        reinterpret_cast<WNDPROC>(SetWindowLongPtrA(hFocusWindow, GWLP_WNDPROC, reinterpret_cast<uintptr_t>(wndproc)));
+        (void)reinterpret_cast<WNDPROC>(SetWindowLongPtrA(hFocusWindow, GWLP_WNDPROC, reinterpret_cast<uintptr_t>(wndproc)));
         ui::init(hFocusWindow, *ppReturnedDeviceInterface, pPresentationParameters->BackBufferWidth, pPresentationParameters->BackBufferHeight);
 
         return ret;

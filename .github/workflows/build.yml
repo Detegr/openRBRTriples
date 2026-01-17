@@ -12,7 +12,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         submodules: recursive
 
@@ -27,40 +27,48 @@ jobs:
         Expand-Archive -Path 'dx.zip' -DestinationPath '.'
         Move-Item -Path $headersPath -Destination 'C:\Program Files (x86)\Microsoft SDKs\Windows\v10.0A\Include'
 
-    - name: Add CMake to PATH
-      run: |
-        $env:PATH += ";C:\Program Files\CMake\bin"
+    - name: Cache Zig compiler
+      id: cache-zig
+      uses: actions/cache@v4
+      with:
+        path: zig-x86_64-windows-0.15.2
+        key: ${{ runner.os }}-zig
 
-    - name: Configure CMake
-      run: cmake -S . -B build -A Win32 -DCMAKE_BUILD_TYPE=RelWithDebInfo
+    - name: Download Zig 0.15.2
+      if: steps.cache-zig.outputs.cache-hit != 'true'
+      run: |
+        $url = 'https://ziglang.org/download/0.15.2/zig-x86_64-windows-0.15.2.zip'
+        Invoke-WebRequest -Uri $url -OutFile 'zig.zip'
+        Expand-Archive -Path 'zig.zip' -DestinationPath '.'
 
     - name: Build
-      run: cmake --build build --config RelWithDebInfo
+      run: .\zig-x86_64-windows-0.15.2\zig.exe build --release=fast
 
     - name: Upload openRBRTriples.dll
       uses: actions/upload-artifact@v4
       with:
         name: openRBRTriples.dll
-        path: build\RelWithDebInfo\openRBRTriples.dll
+        path: zig-out\bin\openRBRTriples.dll
 
     - name: Upload openRBRTriples.pdb
       uses: actions/upload-artifact@v4
       with:
         name: openRBRTriples.pdb
-        path: build\RelWithDebInfo\openRBRTriples.pdb
+        path: zig-out\bin\openRBRTriples.pdb
 
   release:
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' }}
     needs: build
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
     - name: Fetch tags
       run: git fetch --depth=1 origin +refs/tags/*:refs/tags/*
 
-    - name: Download openRBRTriples artifact
+    - name: Download Build Artifact
       uses: actions/download-artifact@v4
       with:
         name: openRBRTriples.dll
@@ -79,10 +87,13 @@ jobs:
       id: release-zip
       run: |
         mkdir -p openRBRTriples-${{ github.ref_name }}/Plugins/openRBRTriples
-        cp openRBRTriples.dll openRBRTriples-${{ github.ref_name }}/Plugins
+        cp multiviewpatcher/multiviewpatcher.dll openRBRTriples-${{ github.ref_name }}/Plugins/openRBRTriples
+        cp thirdparty/dll/* openRBRTriples-${{ github.ref_name }}
+        cp openRBRTriples.dll openRBRTriples.toml.sample openRBRTriples-${{ github.ref_name }}/Plugins
         cp LICENSE openRBRTriples-${{ github.ref_name }}/Plugins/openRBRTriples
         cp README.md openRBRTriples-${{ github.ref_name }}/Plugins/openRBRTriples/README.openrbrtriples.txt
-        zip -r openRBRTriples-${{ github.ref_name }}.zip openRBRTriples-${{ github.ref_name }}
+        cd openRBRTriples-${{ github.ref_name }}
+        zip -r ../openRBRTriples-${{ github.ref_name }}.zip .
 
     - name: Create GitHub release
       id: create_release
@@ -96,8 +107,8 @@ jobs:
         prerelease: false
         body: ${{ env.CHANGELOG }}
 
-    - name: Upload openRBRTriples.zip
-      id: upload_zip
+    - name: Upload release asset
+      id: upload-release-asset
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -106,3 +117,4 @@ jobs:
         asset_name: openRBRTriples-${{ github.ref_name }}.zip
         asset_path: openRBRTriples-${{ github.ref_name }}.zip
         asset_content_type: application/zip
+

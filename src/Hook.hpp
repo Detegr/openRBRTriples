@@ -18,20 +18,20 @@ struct Hook {
     explicit Hook(T src, T tgt)
         : src(src)
     {
-        if (const auto ret = MH_CreateHook(reinterpret_cast<void*>(src), reinterpret_cast<void*>(tgt), reinterpret_cast<void**>(&call)); ret != MH_OK) {
-            throw std::runtime_error(std::format("Could not create a function hook, error {}", (int)ret));
+        if (MH_CreateHook(reinterpret_cast<void*>(src), reinterpret_cast<void*>(tgt), reinterpret_cast<void**>(&call)) != MH_OK) {
+            throw std::runtime_error("Could not hook");
         }
         enable();
     }
     void enable()
     {
-        if (MH_EnableHook(src) != MH_OK) {
-            throw std::runtime_error("Could not disable hook");
+        if (MH_EnableHook(reinterpret_cast<void*>(src)) != MH_OK) {
+            throw std::runtime_error("Could not enable hook");
         }
     }
     void disable()
     {
-        if (MH_DisableHook(src) != MH_OK) {
+        if (MH_DisableHook(reinterpret_cast<void*>(src)) != MH_OK) {
             throw std::runtime_error("Could not disable hook");
         }
     }
@@ -42,7 +42,6 @@ struct Hook {
         src = rhs.src;
         rhs.call = nullptr;
         rhs.src = nullptr;
-        return *this;
     }
     Hook& operator=(const Hook&) = delete;
     Hook& operator=(Hook&& rhs) noexcept
@@ -56,7 +55,10 @@ struct Hook {
     ~Hook()
     {
         if (src)
-            MH_DisableHook(src);
+            MH_RemoveHook(reinterpret_cast<void*>(src));
+
+        call = nullptr;
+        src = nullptr;
     }
 };
 
