@@ -185,10 +185,13 @@ namespace rbr {
                 continue;
             }
 
+            const float sideScreensPhysicalFactor = 24.0 / 28.0;
+            const float physicalFactor = i != RenderTarget::Primary ? sideScreensPhysicalFactor : 1.0;
+
             const auto znear = *z_near_ptr;
             const auto aspect = static_cast<float>(g::cfg.cameras[Primary]->w()) / static_cast<float>(g::cfg.cameras[Primary]->h());
 
-            const float top = glm::tan(0.5f * fov) * znear;
+            const float top = glm::tan(0.5f * fov) * znear * physicalFactor;
             const float bottom = -top;
             const float half_width = top * aspect;
             const float width = half_width * 2;
@@ -206,7 +209,8 @@ namespace rbr {
             g::projection_matrix[i] = glm::frustumLH_ZO(left, right, bottom + yoffs, top + yoffs, znear, 10000.0f);
 
             if (i != RenderTarget::Primary) {
-                g::calculated_screen_angle[i] = 2.0f * std::atan(std::tan(fov / 2.0f) * aspect);
+                // 1/2 of HFoV of the primary plus 1/2 of the HFoV of this side screen adjusted by the physical factor
+                g::calculated_screen_angle[i] = std::atan(std::tan(0.5f * fov) * aspect) + std::atan(std::tan(0.5f * fov) * aspect * physicalFactor);
             }
         }
 
