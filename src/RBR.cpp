@@ -133,10 +133,34 @@ namespace rbr {
         }
     }
 
+    static void write_bytes(uint8_t* address, uint8_t* data, int length)
+    {
+        DWORD oldProtect;
+
+        // Change memory protection to allow writing
+        if (VirtualProtect(address, length, PAGE_EXECUTE_READWRITE, &oldProtect)) {
+            std::memcpy(address, data, length);
+            // Restore the original protection
+            VirtualProtect(address, length, oldProtect, &oldProtect);
+        } else {
+            std::cerr << "Failed to change memory protection." << std::endl;
+        }
+    }
+
     // Read camera FoV from the currently selected RBR camera
     // and recreate the projection matrix with the correct FoV
     float* update_current_camera_fov(uintptr_t p)
     {
+        static bool fenceFixApplied = false;
+        if(!fenceFixApplied)
+        {
+            // Apply (at most once) a patch that makes a point-in-frustum check that makes fences 
+            // not disppear at high FoVs.
+            uint8_t patched_bytes[] {0xB8, 0x01, 0x00, 0x00, 0x00, 0xC2, 0x08, 0x00};
+            write_bytes((uint8_t *)get_address(0x4bf9d0), patched_bytes, sizeof(patched_bytes));
+            fenceFixApplied = true;
+        }
+
         float* original_fov_ptr;
         float* current_fov_ptr = reinterpret_cast<float*>(p + 0x70 + 0x2c0);
         float* z_near_ptr = reinterpret_cast<float*>(p + 0x70 + 0x290);
