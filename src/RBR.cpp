@@ -209,18 +209,22 @@ namespace rbr {
                 continue;
             }
 
-            const float sideScreensPhysicalFactor = 24.0 / 28.0;
+            const float sideScreensPhysicalFactor = 29.6 / 34.0; //24.0 / 28.0;
+            const float sideScreenVerticalAlignmentNormalized = 1.0;
             const float physicalFactor = i != RenderTarget::Primary ? sideScreensPhysicalFactor : 1.0;
 
             const auto znear = *z_near_ptr;
             const auto aspect = static_cast<float>(g::cfg.cameras[Primary]->w()) / static_cast<float>(g::cfg.cameras[Primary]->h());
-
-            const float top = glm::tan(0.5f * fov) * znear * physicalFactor;
+            const float topBeforePhysicalFactor  = glm::tan(0.5f * fov) * znear;
+            const float top = topBeforePhysicalFactor * physicalFactor;
             const float bottom = -top;
             const float half_width = top * aspect;
             const float width = half_width * 2;
             float right = half_width;
             float left = -half_width;
+            
+            const float sideScreenVerticalAlignmentOffset = (topBeforePhysicalFactor - top) * sideScreenVerticalAlignmentNormalized;
+
 
             if (i == RenderTarget::Right) {
                 left += static_cast<float>(g::cfg.cameras[i]->fov_adjustment) * width;
@@ -230,7 +234,8 @@ namespace rbr {
             }
 
             const auto yoffs = znear * (g::cfg.horizon_adjustment.value_or(0.0f) + static_cast<float>(g::cfg.cameras[i]->horizon_adjustment));
-            g::projection_matrix[i] = glm::frustumLH_ZO(left, right, bottom + yoffs, top + yoffs, znear, 10000.0f);
+            g::projection_matrix[i] = glm::frustumLH_ZO(left, right, bottom + yoffs + sideScreenVerticalAlignmentOffset, 
+                top + yoffs + sideScreenVerticalAlignmentOffset, znear, 10000.0f);
 
             if (i != RenderTarget::Primary) {
                 // 1/2 of HFoV of the primary plus 1/2 of the HFoV of this side screen adjusted by the physical factor
