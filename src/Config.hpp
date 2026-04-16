@@ -30,6 +30,8 @@ struct CameraConfig {
     double angle_adjustment;
     double fov_adjustment;
     double horizon_adjustment;
+    double physical_scale;
+    double vertical_alignment;
 
     auto operator<=>(const CameraConfig&) const = default;
 
@@ -37,10 +39,14 @@ struct CameraConfig {
     constexpr int& y() { return extent.y; }
     constexpr int& w() { return extent[2]; }
     constexpr int& h() { return extent[3]; }
+    constexpr double& physicalScale() { return physical_scale; }
+    constexpr double& verticalAlignment() { return vertical_alignment; }
     constexpr const int& x() const { return extent.x; }
     constexpr const int& y() const { return extent.y; }
     constexpr const int& w() const { return extent[2]; }
     constexpr const int& h() const { return extent[3]; }
+    constexpr const double& physicalScale() const { return physical_scale; }
+    constexpr const double& verticalAlignment() const { return vertical_alignment; }
 };
 
 struct Config {
@@ -88,6 +94,8 @@ struct Config {
                     { "angle", cam.angle_adjustment },
                     { "fov", cam.fov_adjustment },
                     { "horizon", cam.horizon_adjustment },
+                    { "physical_scale", cam.physical_scale },
+                    { "vertical_alignment", cam.vertical_alignment },
                 };
                 if (i == Primary)
                     cams.insert_or_assign("center", data);
@@ -123,6 +131,8 @@ struct Config {
             tbl["angle"].value_or(0.0),
             tbl["fov"].value_or(0.0),
             tbl["horizon"].value_or(0.0),
+            tbl["physical_scale"].value_or(1.0),
+            tbl["vertical_alignment"].value_or(0.0),
         };
     }
 

@@ -209,9 +209,8 @@ namespace rbr {
                 continue;
             }
 
-            const float sideScreensPhysicalFactor = 29.6 / 34.0; //24.0 / 28.0;
-            const float sideScreenVerticalAlignmentNormalized = 1.0;
-            const float physicalFactor = i != RenderTarget::Primary ? sideScreensPhysicalFactor : 1.0;
+            const float sideScreenVerticalAlignmentNormalized = i == RenderTarget::Primary ? 0.0 : g::cfg.cameras[i]->verticalAlignment();
+            const float physicalFactor = i == RenderTarget::Primary ? 1.0 : g::cfg.cameras[i]->physicalScale();
 
             // This helps us scale the side screen FoVs inversely proportional to how small their resolution is.
             // This is because the smaller the resolution the bigger the FoV it actually needs to render the target
