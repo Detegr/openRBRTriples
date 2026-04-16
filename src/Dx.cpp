@@ -78,12 +78,21 @@ namespace dx {
                 continue;
             }
 
+            // Cropping logic:
+            // both side screens are vertically centered
+            // left screen is taken from the right side of the render target (i.e. it borders the primary screen).
+            // right screen is taken from the left side of the render target (i.e. it borders the primary screen).
+
+            const LONG srcTop = i == Primary ? 0 : (g::cfg.cameras[Primary]->h() - g::cfg.cameras[i]->h()) / 2;
+            const LONG srcLeft = i == Left ? g::cfg.cameras[Primary]->w() - g::cfg.cameras[i]->w() : 0;
+
+
             // Primary (center) screen dictates the maximum width/height that can be used
             RECT src = {
-                std::max(c->crop.x, 0),
-                std::max(c->crop.y, 0),
-                std::min(g::cfg.cameras[Primary]->w(), c->crop.x + c->w()),
-                std::min(g::cfg.cameras[Primary]->h(), c->crop.y + c->h())
+                srcLeft,
+                srcTop,
+                srcLeft + g::cfg.cameras[i]->w(),
+                srcTop + g::cfg.cameras[i]->h(),
             };
 
             const auto leftWidth = g::cfg.cameras[Left].and_then([](const auto& cam) { return std::optional(cam.w()); }).value_or(0);

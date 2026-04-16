@@ -27,7 +27,6 @@
 
 struct CameraConfig {
     glm::ivec4 extent;
-    glm::ivec2 crop;
     double angle_adjustment;
     double fov_adjustment;
     double horizon_adjustment;
@@ -86,8 +85,6 @@ struct Config {
                     { "y", cam.extent[1] },
                     { "w", cam.extent[2] },
                     { "h", cam.extent[3] },
-                    { "cropx", cam.crop.x },
-                    { "cropy", cam.crop.y },
                     { "angle", cam.angle_adjustment },
                     { "fov", cam.fov_adjustment },
                     { "horizon", cam.horizon_adjustment },
@@ -121,11 +118,8 @@ struct Config {
             tbl["h"].value_or(0.0),
         };
 
-        auto crop = glm::ivec2 { tbl["cropx"].value_or(0), tbl["cropy"].value_or(0) };
-
         return CameraConfig {
             extent,
-            crop,
             tbl["angle"].value_or(0.0),
             tbl["fov"].value_or(0.0),
             tbl["horizon"].value_or(0.0),
@@ -140,7 +134,6 @@ struct Config {
         if (!std::filesystem::exists(path)) {
             cfg.cameras.emplace_back(CameraConfig {
                 defaultExtent,
-                { 0, 0 },
                 0, 0 });
             if (!cfg.write(path)) {
                 MessageBoxA(nullptr, "Could not write openRBRTriples.toml", "Error", MB_OK);
@@ -196,7 +189,6 @@ struct Config {
         if (cfg.cameras.empty()) {
             cfg.cameras.emplace_back(CameraConfig {
                 defaultExtent,
-                { 0, 0 },
                 0, 0, 0 });
         }
 
