@@ -78,22 +78,36 @@ namespace dx {
                 continue;
             }
 
-            // Cropping logic:
-            // both side screens are vertically centered
-            // left screen is taken from the right side of the render target (i.e. it borders the primary screen).
-            // right screen is taken from the left side of the render target (i.e. it borders the primary screen).
 
-            const LONG srcTop = i == Primary ? 0 : (g::cfg.cameras[Primary]->h() - g::cfg.cameras[i]->h()) / 2;
-            const LONG srcLeft = i == Left ? g::cfg.cameras[Primary]->w() - g::cfg.cameras[i]->w() : 0;
+            RECT src;
+            // When we're just showing bitmap fir it whole to the screen.
+            // This will ignore aspect ratio differences between screens.
+            if(rbr::get_game_mode() == GameMode::Starting || rbr::get_game_mode() == GameMode::Loading)
+            {
+                src = {
+                    0,
+                    0,
+                    g::cfg.cameras[Primary]->w(),
+                    g::cfg.cameras[Primary]->h()
+                };
+            }
+            else // When we're doing 3D rendering we have cropping to do.
+            {
+                // Cropping logic:
+                // - both side screens are vertically centered
+                // - left screen is taken from the right side of the render target (i.e. it borders the primary screen).
+                // - right screen is taken from the left side of the render target (i.e. it borders the primary screen).
+                // Primary (center) screen dictates the maximum width/height that can be used
+                const LONG srcTop = i == Primary ? 0 : (g::cfg.cameras[Primary]->h() - g::cfg.cameras[i]->h()) / 2;
+                const LONG srcLeft = i == Left ? g::cfg.cameras[Primary]->w() - g::cfg.cameras[i]->w() : 0;
 
-
-            // Primary (center) screen dictates the maximum width/height that can be used
-            RECT src = {
-                srcLeft,
-                srcTop,
-                srcLeft + g::cfg.cameras[i]->w(),
-                srcTop + g::cfg.cameras[i]->h(),
-            };
+                src = {
+                    srcLeft,
+                    srcTop,
+                    srcLeft + g::cfg.cameras[i]->w(),
+                    srcTop + g::cfg.cameras[i]->h(),
+                };
+            }
 
             const auto leftWidth = g::cfg.cameras[Left].and_then([](const auto& cam) { return std::optional(cam.w()); }).value_or(0);
             const auto centerWidth = g::cfg.cameras[Primary].and_then([](const auto& cam) { return std::optional(cam.w()); }).value_or(0);
