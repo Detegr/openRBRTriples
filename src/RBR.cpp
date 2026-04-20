@@ -133,10 +133,34 @@ namespace rbr {
         }
     }
 
+    static void write_bytes(uint8_t* address, uint8_t* data, int length)
+    {
+        DWORD oldProtect;
+
+        // Change memory protection to allow writing
+        if (VirtualProtect(address, length, PAGE_EXECUTE_READWRITE, &oldProtect)) {
+            std::memcpy(address, data, length);
+            // Restore the original protection
+            VirtualProtect(address, length, oldProtect, &oldProtect);
+        } else {
+            std::cerr << "Failed to change memory protection." << std::endl;
+        }
+    }
+
     // Read camera FoV from the currently selected RBR camera
     // and recreate the projection matrix with the correct FoV
     float* update_current_camera_fov(uintptr_t p)
     {
+        static bool fenceFixApplied = false;
+        if(!fenceFixApplied)
+        {
+            // Apply (at most once) a patch that makes a point-in-frustum check that makes fences 
+            // not disppear at high FoVs.
+            uint8_t patched_bytes[] {0xB8, 0x01, 0x00, 0x00, 0x00, 0xC2, 0x08, 0x00};
+            write_bytes((uint8_t *)get_address(0x4bf9d0), patched_bytes, sizeof(patched_bytes));
+            fenceFixApplied = true;
+        }
+
         float* original_fov_ptr;
         float* current_fov_ptr = reinterpret_cast<float*>(p + 0x70 + 0x2c0);
         float* z_near_ptr = reinterpret_cast<float*>(p + 0x70 + 0x290);
@@ -185,28 +209,52 @@ namespace rbr {
                 continue;
             }
 
+            const float sideScreenVerticalAlignmentNormalized = i == RenderTarget::Primary ? 0.0 : g::cfg.cameras[i]->verticalAlignment();
+            const float physicalFactor = i == RenderTarget::Primary ? 1.0 : g::cfg.cameras[i]->physicalScale();
+
+            // This helps us scale the side screen FoVs inversely proportional to how small their resolution is.
+            // This is because the smaller the resolution the bigger the FoV it actually needs to render the target
+            // such that when the cropping operation is applied we get an image which matches the FoV of the primary screen
+            const float verticalResolutionFactor = static_cast<float>(g::cfg.cameras[Primary]->h()) / static_cast<float>(g::cfg.cameras[i]->h());
+
             const auto znear = *z_near_ptr;
             const auto aspect = static_cast<float>(g::cfg.cameras[Primary]->w()) / static_cast<float>(g::cfg.cameras[Primary]->h());
-
-            const float top = glm::tan(0.5f * fov) * znear;
+        
+            const float topBeforePhysicalFactor  = glm::tan(0.5f * fov) * znear;
+            const float top = topBeforePhysicalFactor * physicalFactor;
             const float bottom = -top;
             const float half_width = top * aspect;
             const float width = half_width * 2;
+            // This aligns the FoVs at the edges of the FoV of the primary monitor.
+            // This is necessary because the FoV adjustment scales from this edge.
+            // The cropping will therefore take the rendering for the side screens from the vertical center but horizontally aligned to the primary screen.
+            const float resolutionFactorRealign = half_width - (half_width / verticalResolutionFactor);
+
             float right = half_width;
             float left = -half_width;
+            
+            const float sideScreenVerticalAlignmentOffset = (topBeforePhysicalFactor - top) * sideScreenVerticalAlignmentNormalized;
+
 
             if (i == RenderTarget::Right) {
-                left += static_cast<float>(g::cfg.cameras[i]->fov_adjustment) * width;
+                left += -resolutionFactorRealign + static_cast<float>(g::cfg.cameras[i]->fov_adjustment) * width;
+                right += -resolutionFactorRealign;
             }
             if (i == RenderTarget::Left) {
-                right += static_cast<float>(g::cfg.cameras[i]->fov_adjustment) * width;
+                right += resolutionFactorRealign + static_cast<float>(g::cfg.cameras[i]->fov_adjustment) * width;
+                left += resolutionFactorRealign;
             }
 
             const auto yoffs = znear * (g::cfg.horizon_adjustment.value_or(0.0f) + static_cast<float>(g::cfg.cameras[i]->horizon_adjustment));
-            g::projection_matrix[i] = glm::frustumLH_ZO(left, right, bottom + yoffs, top + yoffs, znear, 10000.0f);
+            g::projection_matrix[i] = glm::frustumLH_ZO(left * verticalResolutionFactor, 
+                                                        right * verticalResolutionFactor, 
+                                                        (bottom + yoffs) * verticalResolutionFactor + sideScreenVerticalAlignmentOffset, 
+                                                        (top + yoffs) * verticalResolutionFactor  + sideScreenVerticalAlignmentOffset, 
+                                                        znear, 10000.0f);
 
             if (i != RenderTarget::Primary) {
-                g::calculated_screen_angle[i] = 2.0f * std::atan(std::tan(fov / 2.0f) * aspect);
+                // 1/2 of HFoV of the primary plus 1/2 of the HFoV of this side screen adjusted by the physical factor
+                g::calculated_screen_angle[i] = std::atan(std::tan(0.5f * fov) * aspect) + std::atan(std::tan(0.5f * fov) * aspect * physicalFactor);
             }
         }
 

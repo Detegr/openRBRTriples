@@ -55,6 +55,14 @@ namespace ui {
 
     void tick()
     {
+        // Allows value incrementing progressively.
+        // It's cast to int on usage to limit floating point drift so that the save button
+        // becomes greyed out again if the user returns manually to the previously saved value.
+        // This will only work for a few quick presses.
+        static double longPressSpeed = 1.0;
+        constexpr double longPressAcceleration = 1.1;
+        constexpr double maxSpeed = 20.0;
+
         if (ImGui::IsKeyPressed(ImGuiKey_F6, false)) {
             show_on_camera = (show_on_camera + 1) % (g::cfg.valid_cameras.size() + 1);
             if (show_on_camera > 0) {
@@ -99,23 +107,41 @@ namespace ui {
                             g::cfg.cameras[Left]->angle_adjustment -= 0.1;
                         break;
                     case 2:
+                        if (has_left)
+                            g::cfg.cameras[Left]->physical_scale -= 0.001 * longPressAcceleration;
+                        break;
+                    case 3:
+                        if (has_left)
+                            g::cfg.cameras[Left]->vertical_alignment -= 0.001 * longPressAcceleration;
+                        break;
+                    case 4:
                         if (has_right)
                             g::cfg.cameras[Right]->fov_adjustment -= 0.01;
                         break;
-                    case 3:
+                    case 5:
                         if (has_right)
                             g::cfg.cameras[Right]->angle_adjustment -= 0.1;
                         break;
-                    case 4:
+                    case 6:
+                        if (has_left)
+                            g::cfg.cameras[Right]->physical_scale -= 0.001 * longPressSpeed;
+                        break;
+                    case 7:
+                        if (has_left)
+                            g::cfg.cameras[Right]->vertical_alignment -= 0.001 * longPressSpeed;
+                        break;
+                    case 8:
                         g::cfg.horizon_adjustment.value() -= 0.001f;
                         horizon_adjustment_changed = true;
                         break;
-                    case 5:
+                    case 9:
                         toggle_side_monitor_setting(false);
                         break;
                     default:
                         break;
                 }
+
+                longPressSpeed = std::min(longPressSpeed * longPressAcceleration, maxSpeed);
             }
 
             if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
@@ -129,31 +155,51 @@ namespace ui {
                             g::cfg.cameras[Left]->angle_adjustment += 0.1;
                         break;
                     case 2:
+                        if (has_left)
+                            g::cfg.cameras[Left]->physical_scale += 0.001 * (int)longPressSpeed;
+                        break;
+                    case 3:
+                        if (has_left)
+                            g::cfg.cameras[Left]->vertical_alignment += 0.001 * (int)longPressSpeed;
+                        break;
+                    case 4:
                         if (has_right)
                             g::cfg.cameras[Right]->fov_adjustment += 0.01;
                         break;
-                    case 3:
+                    case 5:
                         if (has_right)
                             g::cfg.cameras[Right]->angle_adjustment += 0.1;
                         break;
-                    case 4:
+                    case 6:
+                        if (has_left)
+                            g::cfg.cameras[Right]->physical_scale += 0.001 * (int)longPressSpeed;
+                        break;
+                    case 7:
+                        if (has_left)
+                            g::cfg.cameras[Right]->vertical_alignment += 0.001 * (int)longPressSpeed;
+                        break;
+                    case 8:
                         g::cfg.horizon_adjustment.value() += 0.001f;
                         horizon_adjustment_changed = true;
                         break;
-                    case 5:
+                    case 9:
                         toggle_side_monitor_setting(true);
                         break;
-                    case 6:
+                    case 10:
                         update_config_files();
                         break;
                     default:
                         break;
                 }
+                longPressSpeed = std::min(longPressSpeed * longPressAcceleration, maxSpeed);
             }
 
-            if (ImGui::IsKeyPressed(ImGuiKey_Enter) && selected_row == 6) {
+            if (ImGui::IsKeyPressed(ImGuiKey_Enter) && selected_row == 10) {
                 update_config_files();
             }
+
+            if (ImGui::IsKeyReleased(ImGuiKey_LeftArrow) || ImGui::IsKeyReleased(ImGuiKey_RightArrow))
+                longPressSpeed = 1.0;
         }
     }
 
@@ -193,12 +239,16 @@ namespace ui {
             const ImGuiSelectableFlags flags = disable ? ImGuiSelectableFlags_Disabled : ImGuiSelectableFlags_None;
             ImGui::Selectable(std::format("Fov adjustment left {:.3f}", disable ? 0.0 : g::cfg.cameras[Left]->fov_adjustment).c_str(), selected_row == row_count++, flags);
             ImGui::Selectable(std::format("Bezel correction left {:.2f}", disable ? 0.0 : g::cfg.cameras[Left]->angle_adjustment).c_str(), selected_row == row_count++, flags);
+            ImGui::Selectable(std::format("Screen height scale left {:.1f}%", disable ? 0.0 : g::cfg.cameras[Left]->physical_scale * 100.0).c_str(), selected_row == row_count++, flags);
+            ImGui::Selectable(std::format("Screen vertical alignment left {:.1f}%", disable ? 0.0 : g::cfg.cameras[Left]->vertical_alignment * 100.0).c_str(), selected_row == row_count++, flags);
         }
         {
             const bool disable = !g::cfg.cameras[Right].has_value();
             const ImGuiSelectableFlags flags = disable ? ImGuiSelectableFlags_Disabled : ImGuiSelectableFlags_None;
             ImGui::Selectable(std::format("Fov adjustment right {:.3f}", disable ? 0.0 : g::cfg.cameras[Right]->fov_adjustment).c_str(), selected_row == row_count++, flags);
             ImGui::Selectable(std::format("Bezel correction right {:.2f}", disable ? 0.0 : g::cfg.cameras[Right]->angle_adjustment).c_str(), selected_row == row_count++, flags);
+            ImGui::Selectable(std::format("Screen height scale right {:.1f}%", disable ? 0.0 : g::cfg.cameras[Right]->physical_scale * 100.0).c_str(), selected_row == row_count++, flags);
+            ImGui::Selectable(std::format("Screen vertical alignment right {:.1f}%", disable ? 0.0 : g::cfg.cameras[Right]->vertical_alignment * 100.0).c_str(), selected_row == row_count++, flags);
         }
 
         ImGui::Selectable(std::format("Horizon adjustment (car and camera specific) {:.3f}", g::cfg.horizon_adjustment.value_or(0.0f)).c_str(), selected_row == row_count++);
