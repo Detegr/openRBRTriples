@@ -311,6 +311,13 @@ namespace rbr {
                 continue;
             }
 
+            // In the menu only the primary screen is rendered: rendering the
+            // side screens triples the draw call cost and drops the menu to
+            // ~11 FPS on some map selection screens.
+            if (g::game_mode == GameMode::MainMenu && i != RenderTarget::Primary) {
+                continue;
+            }
+
             if (g::cfg.side_monitors_half_hz && i == render_target_to_skip) {
                 if (!g::cfg.side_monitors_half_hz_btb_only || (g::cfg.side_monitors_half_hz_btb_only && rbr::is_on_btb_stage())) {
                     continue;

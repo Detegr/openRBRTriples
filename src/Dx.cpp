@@ -74,6 +74,24 @@ namespace dx {
             return 0;
         }
 
+        // In the menu only the primary screen is rendered (see RBR.cpp render
+        // loop), so show only it and black out the side screen areas.
+        if (rbr::get_game_mode() == GameMode::MainMenu) {
+            g::d3d_dev->ColorFill(back_buffer, nullptr, 0);
+
+            const auto leftWidth = g::cfg.cameras[Left].and_then([](const auto& cam) { return std::optional(cam.w()); }).value_or(0);
+            const auto& c = g::cfg.cameras[Primary].value();
+            RECT src = { 0, 0, c.w(), c.h() };
+            RECT dst = { static_cast<LONG>(leftWidth), c.y(),
+                         static_cast<LONG>(leftWidth + c.w()), c.y() + c.h() };
+            if (const auto ret = g::d3d_dev->StretchRect(std::get<0>(g::surfaces[Primary]), &src, back_buffer, &dst, D3DTEXF_NONE); ret != D3D_OK) {
+                dbg(std::format("StretchRect #{} failed: {}", static_cast<int>(Primary), ret));
+            }
+            ui::present(back_buffer);
+            back_buffer->Release();
+            return g::swapchain->Present(nullptr, nullptr, nullptr, nullptr, 0);
+        }
+
         D3DSURFACE_DESC bb_desc;
         ZeroMemory(&bb_desc, sizeof(bb_desc));
         back_buffer->GetDesc(&bb_desc);
