@@ -1,3 +1,20 @@
+## 0.4.0
+
+- Replace the FoV-derived projection with a physical "hinged monitor" model:
+  the projection for each screen is built from the monitor geometry
+  (`monitor_width` / `eye_distance` / `side_angle` in mm/degrees), giving
+  mathematically correct aspect ratios on every screen regardless of the game
+  resolution or FoV
+- Add NVIDIA Surround support: when the game window spans all monitors the
+  backbuffer is split into equal thirds; can be enabled automatically with
+  `auto_detect_surround`
+- Add per-screen bezel compensation (`bezel_x` / `bezel_y`) that shifts the
+  image in the screen plane so content continues seamlessly across bezels
+- Replace the old FoV/angle side adjustments with the above live-adjustable
+  settings in the F6 menu; existing `fov_adjustment` values are ignored by the
+  new projection (use `bezel_x` instead), `angle_adjustment` is still applied
+  on top of `side_angle`
+
 ## 0.3.2
 
 - Fix incompatibility with RBRHUD plugin that caused the car interior to be
