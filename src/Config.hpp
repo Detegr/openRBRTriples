@@ -31,6 +31,8 @@ struct CameraConfig {
     double angle_adjustment;
     double fov_adjustment;
     double horizon_adjustment;
+    double bezel_x = 0.0;
+    double bezel_y = 0.0;
 
     auto operator<=>(const CameraConfig&) const = default;
 
@@ -45,12 +47,21 @@ struct CameraConfig {
 };
 
 struct Config {
+    // Single source of truth for default triples geometry (mm / degrees).
+    static constexpr float default_monitor_width = 597.0f;
+    static constexpr float default_eye_distance = 600.0f;
+    static constexpr float default_side_angle = 45.0f;
+
     std::vector<std::optional<CameraConfig>> cameras;
     std::vector<std::reference_wrapper<std::optional<CameraConfig>>> valid_cameras;
     bool aa_center_screen_only = true;
     bool side_monitors_half_hz = true;
     bool side_monitors_half_hz_btb_only = true;
+    bool auto_detect_surround = false;
     std::optional<float> horizon_adjustment = std::nullopt;
+    float MonitorWidth = default_monitor_width;
+    float EyeDistance = default_eye_distance;
+    float SideAngle = default_side_angle;
 
     Config& operator=(const Config& rhs)
     {
@@ -60,6 +71,11 @@ struct Config {
         aa_center_screen_only = rhs.aa_center_screen_only;
         side_monitors_half_hz = rhs.side_monitors_half_hz;
         side_monitors_half_hz_btb_only = rhs.side_monitors_half_hz_btb_only;
+        auto_detect_surround = rhs.auto_detect_surround;
+        horizon_adjustment = rhs.horizon_adjustment;
+        MonitorWidth = rhs.MonitorWidth;
+        EyeDistance = rhs.EyeDistance;
+        SideAngle = rhs.SideAngle;
         return *this;
     }
 
@@ -68,7 +84,12 @@ struct Config {
         return cameras == rhs.cameras
             && aa_center_screen_only == rhs.aa_center_screen_only
             && side_monitors_half_hz == rhs.side_monitors_half_hz
-            && side_monitors_half_hz_btb_only == rhs.side_monitors_half_hz_btb_only;
+            && side_monitors_half_hz_btb_only == rhs.side_monitors_half_hz_btb_only
+            && auto_detect_surround == rhs.auto_detect_surround
+            && horizon_adjustment == rhs.horizon_adjustment
+            && MonitorWidth == rhs.MonitorWidth
+            && EyeDistance == rhs.EyeDistance
+            && SideAngle == rhs.SideAngle;
     }
 
     bool write(const std::filesystem::path& path) const
@@ -91,6 +112,8 @@ struct Config {
                     { "angle", cam.angle_adjustment },
                     { "fov", cam.fov_adjustment },
                     { "horizon", cam.horizon_adjustment },
+                    { "bezel_x", cam.bezel_x },
+                    { "bezel_y", cam.bezel_y },
                 };
                 if (i == Primary)
                     cams.insert_or_assign("center", data);
@@ -100,11 +123,19 @@ struct Config {
                     cams.insert_or_assign("right", data);
             }
         }
+        toml::table triples {
+            { "monitor_width", MonitorWidth },
+            { "eye_distance", EyeDistance },
+            { "side_angle", SideAngle },
+        };
+
         toml::table out {
             { "anti_alias_center_screen_only", aa_center_screen_only },
             { "side_monitors_half_hz", side_monitors_half_hz },
             { "side_monitors_half_hz_btb_only", side_monitors_half_hz_btb_only },
+            { "auto_detect_surround", auto_detect_surround },
             { "screen", cams },
+            { "triples", triples },
         };
 
         f << out;
@@ -129,6 +160,8 @@ struct Config {
             tbl["angle"].value_or(0.0),
             tbl["fov"].value_or(0.0),
             tbl["horizon"].value_or(0.0),
+            tbl["bezel_x"].value_or(0.0),
+            tbl["bezel_y"].value_or(0.0),
         };
     }
 
@@ -192,6 +225,14 @@ struct Config {
         cfg.aa_center_screen_only = parsed["anti_alias_center_screen_only"].value_or(true);
         cfg.side_monitors_half_hz = parsed["side_monitors_half_hz"].value_or(true);
         cfg.side_monitors_half_hz_btb_only = parsed["side_monitors_half_hz_btb_only"].value_or(true);
+        cfg.auto_detect_surround = parsed["auto_detect_surround"].value_or(false);
+
+        auto triples = parsed["triples"];
+        if (triples.is_table()) {
+            cfg.MonitorWidth = static_cast<float>(triples["monitor_width"].value_or(Config::default_monitor_width));
+            cfg.EyeDistance = static_cast<float>(triples["eye_distance"].value_or(Config::default_eye_distance));
+            cfg.SideAngle = static_cast<float>(triples["side_angle"].value_or(Config::default_side_angle));
+        }
 
         if (cfg.cameras.empty()) {
             cfg.cameras.emplace_back(CameraConfig {

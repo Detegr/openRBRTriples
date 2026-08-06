@@ -54,14 +54,20 @@ namespace g {
     // Custom projection matrix used by the plugin
     extern M4 projection_matrix[3];
 
-    // Screen angles
-    extern float calculated_screen_angle[3];
+    // Per-camera dirty flag: projection needs rebuild (set to true at start of each frame)
+    extern bool projection_dirty[3];
+
+    // Cached z-near for per-frame Flat triples projection rebuild
+    extern float flat_znear;
 
     // Swapchain used to render all windows into one
     extern IDirect3DSwapChain9* swapchain;
 
     // Pointer to the current FoV (in degrees), might be null
     extern float* current_fov_ptr;
+
+    // NVIDIA Surround mode: single window/backbuffer spanning all monitors
+    extern bool surround_mode;
 
     // Hooks to DirectX and RBR functions
     namespace hooks {

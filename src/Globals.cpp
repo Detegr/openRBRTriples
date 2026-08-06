@@ -14,9 +14,11 @@ namespace g {
     std::optional<RenderTarget> current_render_target;
     uint8_t* btb_track_status_ptr;
     M4 projection_matrix[3];
-    float calculated_screen_angle[3];
+    bool projection_dirty[3];
+    float flat_znear;
     IDirect3DSwapChain9* swapchain;
     float* current_fov_ptr;
+    bool surround_mode;
 
     namespace hooks {
         // DirectX functions

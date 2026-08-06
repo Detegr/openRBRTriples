@@ -1,6 +1,5 @@
 const std = @import("std");
 const version = @import("build.zig.zon").version;
-const zcc = @import("compile_commands");
 
 const OPENRBRTriples_VERSION = .{
     .openRBRTriples_Major = "0",
@@ -32,6 +31,7 @@ pub fn build(b: *std.Build) void {
     dll.addCSourceFiles(.{ .files = &.{
         "src/API.cpp",
         "src/Dx.cpp",
+        "src/FlatTriples.cpp",
         "src/Globals.cpp",
         "src/Menu.cpp",
         "src/RBR.cpp",
@@ -85,9 +85,4 @@ pub fn build(b: *std.Build) void {
     dll.linkSystemLibrary("version");
 
     b.installArtifact(dll);
-
-    // For compile_commands.json
-    var targets: std.ArrayListUnmanaged(*std.Build.Step.Compile) = .empty;
-    targets.append(b.allocator, dll) catch @panic("OOM");
-    _ = zcc.createStep(b, "cdb", targets.toOwnedSlice(b.allocator) catch @panic("OOM"));
 }
