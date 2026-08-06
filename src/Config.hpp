@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -247,9 +248,78 @@ struct Config {
         return cfg;
     }
 
+    // RSF launcher bridge: override per-camera widths from default.ini.
+    // The RSF launcher writes CenterXRes/LeftXRes/RightXRes with mode-dependent
+    // values (including BezelSize adjustment in Surround mode), keeping them
+    // always up-to-date, while openRBRTriples.toml may contain stale widths
+    // from a previous mode.
+    //
+    // This function reads the RSF config, patches the TOML file on disk,
+    // then from_toml() parses the corrected file.  The result is that camera
+    // widths always match the RSF launcher's current mode and BezelSize.
+    //
+    // NOTE: This is a bridge for RSF launcher integration.  If this branch
+    // is ever separated from the RSF launcher, remove this function and the
+    // call to it in from_path() so that camera widths come exclusively from
+    // openRBRTriples.toml.
+    static void patch_widths_from_rsf(const std::filesystem::path& toml_path)
+    {
+        char gameDir[MAX_PATH];
+        GetCurrentDirectoryA(MAX_PATH, gameDir);
+        std::string iniPath = std::string(gameDir) + "\\rsf_launcher\\Configs\\default.ini";
+
+        auto read_xres = [&](const char* key) -> int {
+            char buf[16] = "0";
+            GetPrivateProfileStringA("openRBRTriples", key, "0", buf, sizeof(buf), iniPath.c_str());
+            return atoi(buf);
+        };
+
+        int center_w = read_xres("CenterXRes");
+        int left_w   = read_xres("LeftXRes");
+        int right_w  = read_xres("RightXRes");
+
+        if (center_w <= 0 && left_w <= 0 && right_w <= 0)
+            return;
+
+        if (!std::filesystem::exists(toml_path))
+            return;
+
+        try {
+            auto tbl = toml::parse_file(toml_path.c_str());
+            bool modified = false;
+
+            auto override_w = [&](const char* section, int new_w) {
+                if (new_w <= 0) return;
+                auto cam = tbl["screen"][section];
+                if (!cam.is_table()) return;
+                int cur = cam["w"].value_or(0);
+                if (cur != new_w) {
+                    cam.as_table()->insert_or_assign("w", new_w);
+                    modified = true;
+                }
+            };
+
+            override_w("center", center_w);
+            override_w("left", left_w);
+            override_w("right", right_w);
+
+            if (modified) {
+                std::ofstream f(toml_path);
+                if (f.good()) {
+                    f << tbl;
+                    f.close();
+                }
+            }
+        } catch (...) {
+            // Parse failed; leave TOML unchanged.
+        }
+    }
+
     static Config from_path(const std::filesystem::path& path, glm::ivec4 defaultExtent)
     {
-        return from_toml(path / "openRBRTriples.toml", defaultExtent);
+        auto toml_path = path / "openRBRTriples.toml";
+        patch_widths_from_rsf(toml_path);
+        return from_toml(toml_path, defaultExtent);
     }
 
     static std::optional<std::string> to_string(const std::filesystem::path& p)
