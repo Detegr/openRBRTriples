@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -31,6 +32,8 @@ struct CameraConfig {
     double angle_adjustment;
     double fov_adjustment;
     double horizon_adjustment;
+    double bezel_x = 0.0;
+    double bezel_y = 0.0;
 
     auto operator<=>(const CameraConfig&) const = default;
 
@@ -45,12 +48,21 @@ struct CameraConfig {
 };
 
 struct Config {
+    // Single source of truth for default triples geometry (mm / degrees).
+    static constexpr float default_monitor_width = 597.0f;
+    static constexpr float default_eye_distance = 600.0f;
+    static constexpr float default_side_angle = 45.0f;
+
     std::vector<std::optional<CameraConfig>> cameras;
     std::vector<std::reference_wrapper<std::optional<CameraConfig>>> valid_cameras;
     bool aa_center_screen_only = true;
     bool side_monitors_half_hz = true;
     bool side_monitors_half_hz_btb_only = true;
+    bool auto_detect_surround = false;
     std::optional<float> horizon_adjustment = std::nullopt;
+    float MonitorWidth = default_monitor_width;
+    float EyeDistance = default_eye_distance;
+    float SideAngle = default_side_angle;
 
     Config& operator=(const Config& rhs)
     {
@@ -60,6 +72,11 @@ struct Config {
         aa_center_screen_only = rhs.aa_center_screen_only;
         side_monitors_half_hz = rhs.side_monitors_half_hz;
         side_monitors_half_hz_btb_only = rhs.side_monitors_half_hz_btb_only;
+        auto_detect_surround = rhs.auto_detect_surround;
+        horizon_adjustment = rhs.horizon_adjustment;
+        MonitorWidth = rhs.MonitorWidth;
+        EyeDistance = rhs.EyeDistance;
+        SideAngle = rhs.SideAngle;
         return *this;
     }
 
@@ -68,7 +85,12 @@ struct Config {
         return cameras == rhs.cameras
             && aa_center_screen_only == rhs.aa_center_screen_only
             && side_monitors_half_hz == rhs.side_monitors_half_hz
-            && side_monitors_half_hz_btb_only == rhs.side_monitors_half_hz_btb_only;
+            && side_monitors_half_hz_btb_only == rhs.side_monitors_half_hz_btb_only
+            && auto_detect_surround == rhs.auto_detect_surround
+            && horizon_adjustment == rhs.horizon_adjustment
+            && MonitorWidth == rhs.MonitorWidth
+            && EyeDistance == rhs.EyeDistance
+            && SideAngle == rhs.SideAngle;
     }
 
     bool write(const std::filesystem::path& path) const
@@ -91,6 +113,8 @@ struct Config {
                     { "angle", cam.angle_adjustment },
                     { "fov", cam.fov_adjustment },
                     { "horizon", cam.horizon_adjustment },
+                    { "bezel_x", cam.bezel_x },
+                    { "bezel_y", cam.bezel_y },
                 };
                 if (i == Primary)
                     cams.insert_or_assign("center", data);
@@ -100,11 +124,19 @@ struct Config {
                     cams.insert_or_assign("right", data);
             }
         }
+        toml::table triples {
+            { "monitor_width", MonitorWidth },
+            { "eye_distance", EyeDistance },
+            { "side_angle", SideAngle },
+        };
+
         toml::table out {
             { "anti_alias_center_screen_only", aa_center_screen_only },
             { "side_monitors_half_hz", side_monitors_half_hz },
             { "side_monitors_half_hz_btb_only", side_monitors_half_hz_btb_only },
+            { "auto_detect_surround", auto_detect_surround },
             { "screen", cams },
+            { "triples", triples },
         };
 
         f << out;
@@ -129,6 +161,8 @@ struct Config {
             tbl["angle"].value_or(0.0),
             tbl["fov"].value_or(0.0),
             tbl["horizon"].value_or(0.0),
+            tbl["bezel_x"].value_or(0.0),
+            tbl["bezel_y"].value_or(0.0),
         };
     }
 
@@ -192,6 +226,14 @@ struct Config {
         cfg.aa_center_screen_only = parsed["anti_alias_center_screen_only"].value_or(true);
         cfg.side_monitors_half_hz = parsed["side_monitors_half_hz"].value_or(true);
         cfg.side_monitors_half_hz_btb_only = parsed["side_monitors_half_hz_btb_only"].value_or(true);
+        cfg.auto_detect_surround = parsed["auto_detect_surround"].value_or(false);
+
+        auto triples = parsed["triples"];
+        if (triples.is_table()) {
+            cfg.MonitorWidth = static_cast<float>(triples["monitor_width"].value_or(Config::default_monitor_width));
+            cfg.EyeDistance = static_cast<float>(triples["eye_distance"].value_or(Config::default_eye_distance));
+            cfg.SideAngle = static_cast<float>(triples["side_angle"].value_or(Config::default_side_angle));
+        }
 
         if (cfg.cameras.empty()) {
             cfg.cameras.emplace_back(CameraConfig {
@@ -206,9 +248,78 @@ struct Config {
         return cfg;
     }
 
+    // RSF launcher bridge: override per-camera widths from default.ini.
+    // The RSF launcher writes CenterXRes/LeftXRes/RightXRes with mode-dependent
+    // values (including BezelSize adjustment in Surround mode), keeping them
+    // always up-to-date, while openRBRTriples.toml may contain stale widths
+    // from a previous mode.
+    //
+    // This function reads the RSF config, patches the TOML file on disk,
+    // then from_toml() parses the corrected file.  The result is that camera
+    // widths always match the RSF launcher's current mode and BezelSize.
+    //
+    // NOTE: This is a bridge for RSF launcher integration.  If this branch
+    // is ever separated from the RSF launcher, remove this function and the
+    // call to it in from_path() so that camera widths come exclusively from
+    // openRBRTriples.toml.
+    static void patch_widths_from_rsf(const std::filesystem::path& toml_path)
+    {
+        char gameDir[MAX_PATH];
+        GetCurrentDirectoryA(MAX_PATH, gameDir);
+        std::string iniPath = std::string(gameDir) + "\\rsf_launcher\\Configs\\default.ini";
+
+        auto read_xres = [&](const char* key) -> int {
+            char buf[16] = "0";
+            GetPrivateProfileStringA("openRBRTriples", key, "0", buf, sizeof(buf), iniPath.c_str());
+            return atoi(buf);
+        };
+
+        int center_w = read_xres("CenterXRes");
+        int left_w   = read_xres("LeftXRes");
+        int right_w  = read_xres("RightXRes");
+
+        if (center_w <= 0 && left_w <= 0 && right_w <= 0)
+            return;
+
+        if (!std::filesystem::exists(toml_path))
+            return;
+
+        try {
+            auto tbl = toml::parse_file(toml_path.c_str());
+            bool modified = false;
+
+            auto override_w = [&](const char* section, int new_w) {
+                if (new_w <= 0) return;
+                auto cam = tbl["screen"][section];
+                if (!cam.is_table()) return;
+                int cur = cam["w"].value_or(0);
+                if (cur != new_w) {
+                    cam.as_table()->insert_or_assign("w", new_w);
+                    modified = true;
+                }
+            };
+
+            override_w("center", center_w);
+            override_w("left", left_w);
+            override_w("right", right_w);
+
+            if (modified) {
+                std::ofstream f(toml_path);
+                if (f.good()) {
+                    f << tbl;
+                    f.close();
+                }
+            }
+        } catch (...) {
+            // Parse failed; leave TOML unchanged.
+        }
+    }
+
     static Config from_path(const std::filesystem::path& path, glm::ivec4 defaultExtent)
     {
-        return from_toml(path / "openRBRTriples.toml", defaultExtent);
+        auto toml_path = path / "openRBRTriples.toml";
+        patch_widths_from_rsf(toml_path);
+        return from_toml(toml_path, defaultExtent);
     }
 
     static std::optional<std::string> to_string(const std::filesystem::path& p)

@@ -1,4 +1,5 @@
 #include "Dx.hpp"
+#include "FlatTriples.hpp"
 #include "Globals.hpp"
 #include "IPlugin.h"
 #include "RBR.hpp"
@@ -73,33 +74,85 @@ namespace dx {
             return 0;
         }
 
+        // In the menu only the primary screen is rendered (see RBR.cpp render
+        // loop), so show only it and black out the side screen areas.
+        if (rbr::get_game_mode() == GameMode::MainMenu) {
+            g::d3d_dev->ColorFill(back_buffer, nullptr, 0);
+
+            const auto leftWidth = g::cfg.cameras[Left].and_then([](const auto& cam) { return std::optional(cam.w()); }).value_or(0);
+            const auto& c = g::cfg.cameras[Primary].value();
+            RECT src = { 0, 0, c.w(), c.h() };
+            RECT dst = { static_cast<LONG>(leftWidth), c.y(),
+                         static_cast<LONG>(leftWidth + c.w()), c.y() + c.h() };
+            if (const auto ret = g::d3d_dev->StretchRect(std::get<0>(g::surfaces[Primary]), &src, back_buffer, &dst, D3DTEXF_NONE); ret != D3D_OK) {
+                dbg(std::format("StretchRect #{} failed: {}", static_cast<int>(Primary), ret));
+            }
+            ui::present(back_buffer);
+            back_buffer->Release();
+            return g::swapchain->Present(nullptr, nullptr, nullptr, nullptr, 0);
+        }
+
+        D3DSURFACE_DESC bb_desc;
+        ZeroMemory(&bb_desc, sizeof(bb_desc));
+        back_buffer->GetDesc(&bb_desc);
+
+        int min_x = INT_MAX;
+        for (const auto& [ic, cc] : std::views::enumerate(g::cfg.cameras)) {
+            if (cc.has_value()) {
+                min_x = std::min(min_x, cc->x());
+            }
+        }
+
         for (const auto& [i, c] : std::views::enumerate(g::cfg.cameras)) {
             if (!c.has_value()) {
                 continue;
             }
 
-            // Primary (center) screen dictates the maximum width/height that can be used
+            IDirect3DSurface9* src_surface = std::get<0>(g::surfaces[i]);
+
+            // Crop to physical screen pixel dimensions so that bezel-compensation
+            // extra pixels (e.g. 1960 vs 1920) are hidden and don't cause overlap
+            // between adjacent screens in the backbuffer.
+            uint32_t phys_w, phys_h;
+            if (g::surround_mode) {
+                phys_w = c->w();
+                phys_h = c->h();
+            } else {
+                phys_w = GetSystemMetrics(SM_CXSCREEN);
+                phys_h = GetSystemMetrics(SM_CYSCREEN);
+            }
+            uint32_t extra_w = (static_cast<uint32_t>(c->w()) > phys_w)
+                             ? (static_cast<uint32_t>(c->w()) - phys_w) / 2
+                             : 0;
+
             RECT src = {
-                std::max(c->crop.x, 0),
-                std::max(c->crop.y, 0),
-                std::min(g::cfg.cameras[Primary]->w(), c->crop.x + c->w()),
-                std::min(g::cfg.cameras[Primary]->h(), c->crop.y + c->h())
+                static_cast<LONG>(std::max(c->crop.x, 0) + extra_w),
+                static_cast<LONG>(std::max(c->crop.y, 0)),
+                static_cast<LONG>(std::min(g::cfg.cameras[Primary]->w(), c->crop.x + static_cast<int>(phys_w)) + extra_w),
+                static_cast<LONG>(std::min(g::cfg.cameras[Primary]->h(), c->crop.y + static_cast<int>(phys_h)))
             };
 
-            const auto leftWidth = g::cfg.cameras[Left].and_then([](const auto& cam) { return std::optional(cam.w()); }).value_or(0);
-            const auto centerWidth = g::cfg.cameras[Primary].and_then([](const auto& cam) { return std::optional(cam.w()); }).value_or(0);
-
-            uint32_t dstx;
-            if (i == Left) {
-                dstx = 0;
-            } else if (i == Primary) {
-                dstx = leftWidth;
+            RECT dst;
+            if (g::surround_mode) {
+                // NVIDIA Surround: single backbuffer spanning all monitors.
+                // Split it into equal thirds in logical screen order (Left, Primary, Right).
+                int n = 0;
+                for (const auto& cam : g::cfg.cameras) if (cam.has_value()) n++;
+                uint32_t per_mon_w = bb_desc.Width / static_cast<DWORD>(n > 0 ? n : 1);
+                static const size_t screen_order[3] = { Left, Primary, Right };
+                int si = -1;
+                for (int j = 0; j < 3; ++j) {
+                    if (screen_order[j] == i && j < n) { si = j; break; }
+                }
+                if (si < 0) continue;
+                dst = { static_cast<LONG>(si * per_mon_w), c->y(),
+                        static_cast<LONG>((si + 1) * per_mon_w), static_cast<LONG>(c->y() + c->h()) };
             } else {
-                dstx = leftWidth + centerWidth;
+                // Independent screens: place each RT at its configured position
+                uint32_t dstx = c->x() - min_x;
+                dst = { static_cast<LONG>(dstx), c->y(), static_cast<LONG>(dstx + c->w()), static_cast<LONG>(c->y() + c->h()) };
             }
-
-            RECT dst = { static_cast<LONG>(dstx), c->y(), static_cast<LONG>(dstx + c->w()), c->y() + c->h() };
-            if (const auto ret = g::d3d_dev->StretchRect(std::get<0>(g::surfaces[i]), &src, back_buffer, &dst, D3DTEXF_NONE); ret != D3D_OK) {
+            if (const auto ret = g::d3d_dev->StretchRect(src_surface, &src, back_buffer, &dst, D3DTEXF_NONE); ret != D3D_OK) {
                 dbg(std::format("StretchRect #{} failed: {}", i, ret));
                 if (rbr::get_game_mode() == GameMode::Starting) {
                     std::string screen_name;
@@ -126,20 +179,46 @@ namespace dx {
 
     static M4 get_rotation_matrix()
     {
-        float angle = 0.0;
-        auto main_menu_camera_tweak = glm::identity<M4>();
         if (rbr::is_rendering()) {
             if (rbr::get_game_mode() == GameMode::MainMenu) {
                 // The main menu camera looks weird. This is an attempt to make it look like normal.
-                main_menu_camera_tweak = glm::translate(glm::mat4x4(1.0f), glm::vec3(0, -1.5f, 2.0f)) * glm::mat4_cast(glm::angleAxis(glm::radians(-20.0f), glm::vec3 { 1, 0, 0 }));
+                return glm::translate(glm::mat4x4(1.0f), glm::vec3(0, -1.5f, 2.0f)) * glm::mat4_cast(glm::angleAxis(glm::radians(-20.0f), glm::vec3 { 1, 0, 0 }));
             }
-            angle = static_cast<float>(g::calculated_screen_angle[g::current_render_target.value()]);
-            angle += static_cast<float>(glm::radians(g::cfg.cameras[g::current_render_target.value()]->angle_adjustment));
-            if (g::current_render_target.value() == RenderTarget::Right) {
-                angle = -angle;
+
+            auto rt = g::current_render_target.value_or(RenderTarget::Primary);
+
+            // Per-screen view rotation.
+            //
+            // The frustum from rebuild_flat_projection() is defined in a coordinate
+            // frame rotated by theta (θ) from world space, where:
+            //   θ < 0 for left screen (looking left), θ > 0 for right (looking right).
+            // To transform world points into this frame we apply R(+θ) — NOT R(θ).
+            //
+            // Reason: a standard Y-rotation matrix R(φ) adds φ to the point's world
+            // angle α as measured from +Z (i.e. atan2(x, z)):
+            //   R(φ)·[r·sin α, 0, r·cos α]ᵀ = [r·sin(α+φ), 0, r·cos(α+φ)]ᵀ
+            //   ⇒ α' = α + φ
+            //
+            // The frustum expects α' = α - θ (rel = world_angle - theta).
+            // So we need R(+θ) since α + φ = α - θ ⇒ φ = -θ.
+            //   Left:  θ = -SideAngle ⇒ φ = +SideAngle → R(+SideAngle)
+            //   Right: θ = +SideAngle ⇒ φ = -SideAngle → R(-SideAngle)
+            //
+            // NOTE: the sign of φ is OPPOSITE to the intuitive "look left, rotate left".
+            //       If you change this, verify with the math above, not intuition.
+            float angle = 0.0f;
+            if (rt == Left) {
+                angle = glm::radians(g::cfg.SideAngle);
+            } else if (rt == Right) {
+                angle = -glm::radians(g::cfg.SideAngle);
             }
+
+            // Legacy per-camera angle adjustment, applied on top of the physical angle
+            angle += static_cast<float>(glm::radians(g::cfg.cameras[rt]->angle_adjustment)) * (rt == Right ? -1.0f : 1.0f);
+
+            return glm::rotate(glm::identity<M4>(), angle, { 0, 1, 0 });
         }
-        return glm::rotate(glm::identity<M4>(), angle, { 0, 1, 0 }) * main_menu_camera_tweak;
+        return glm::identity<M4>();
     }
 
     HRESULT __stdcall SetVertexShaderConstantF(IDirect3DDevice9* This, UINT StartRegister, const float* pConstantData, UINT Vector4fCount)
@@ -176,9 +255,21 @@ namespace dx {
     HRESULT __stdcall SetTransform(IDirect3DDevice9* This, D3DTRANSFORMSTATETYPE State, const D3DMATRIX* pMatrix)
     {
         if (rbr::is_rendering() && State == D3DTS_PROJECTION) {
+            auto rt = g::current_render_target.value_or(RenderTarget::Primary);
+            // Rebuild the per-camera projection from the physical monitor
+            // geometry if it hasn't been built for this frame yet
+            flattriples::rebuild_flat_projection(rt);
             shader::current_projection_matrix = m4_from_d3d(*pMatrix);
-            shader::current_projection_matrix_inverse = glm::inverse(shader::current_projection_matrix);
-            fixedfunction::current_projection_matrix = d3d_from_m4(g::projection_matrix[g::current_render_target.value_or(RenderTarget::Primary)]);
+            // Cache the game projection's inverse — it rarely changes
+            // per-camera per-frame, avoiding a glm::inverse every draw call
+            static M4 last_orig_proj;
+            static M4 last_orig_inv;
+            if (memcmp(&last_orig_proj, pMatrix, sizeof(D3DMATRIX)) != 0) {
+                last_orig_proj = m4_from_d3d(*pMatrix);
+                last_orig_inv = glm::inverse(last_orig_proj);
+            }
+            shader::current_projection_matrix_inverse = last_orig_inv;
+            fixedfunction::current_projection_matrix = d3d_from_m4(g::projection_matrix[rt]);
             return g::hooks::set_transform.call(g::d3d_dev, State, &fixedfunction::current_projection_matrix);
         } else if (rbr::is_rendering() && State == D3DTS_VIEW) {
             fixedfunction::current_view_matrix = d3d_from_m4(get_rotation_matrix() * m4_from_d3d(*pMatrix));
@@ -263,8 +354,29 @@ namespace dx {
         g::main_window = hFocusWindow;
         g::d3d_dev = dev;
 
+        // Detect NVIDIA Surround: the game window is created spanning all
+        // monitors, so its width exceeds a single screen's configured width.
+        if (g::cfg.auto_detect_surround) {
+            g::surround_mode = (w > static_cast<UINT>(g::cfg.cameras[Primary]->w()));
+        }
+
+        // Force the Surround window to the primary monitor to prevent
+        // resolution mismatch on non-Surround displays.
+        if (g::surround_mode) {
+            HMONITOR hMon = MonitorFromWindow(g::main_window, MONITOR_DEFAULTTOPRIMARY);
+            MONITORINFO mi{};
+            mi.cbSize = sizeof(mi);
+            if (GetMonitorInfo(hMon, &mi)) {
+                SetWindowPos(g::main_window, nullptr,
+                    mi.rcMonitor.left, mi.rcMonitor.top,
+                    mi.rcMonitor.right - mi.rcMonitor.left,
+                    mi.rcMonitor.bottom - mi.rcMonitor.top,
+                    SWP_NOZORDER | SWP_FRAMECHANGED);
+            }
+        }
+
         g::surfaces.resize(g::cfg.cameras.size());
-        auto total_width = 0;
+        int min_x = INT_MAX, max_x = INT_MIN;
         for (const auto& [i, c] : std::views::enumerate(g::cfg.cameras)) {
             if (!c.has_value()) {
                 continue;
@@ -287,9 +399,11 @@ namespace dx {
                 g::cfg.cameras[Primary]->w(),
                 g::cfg.cameras[Primary]->h());
 
-            // Calculate total_width for creating a swapchain for a large (combined width) window
-            total_width += g::cfg.cameras[i]->w();
+            min_x = std::min(min_x, c->x());
+            max_x = std::max(max_x, c->x() + c->w());
         }
+        // Span all configured screens; tolerates arbitrary x() offsets
+        auto total_width = max_x - min_x;
 
         pPresentationParameters->hDeviceWindow = g::main_window;
         pPresentationParameters->BackBufferWidth = total_width;

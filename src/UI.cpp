@@ -85,73 +85,47 @@ namespace ui {
                 }
             }
 
-            const bool has_left = g::cfg.cameras[Left].has_value();
-            const bool has_right = g::cfg.cameras[Right].has_value();
+            auto adj_bx = [&](bool dir, bool left) {
+                auto& cam = g::cfg.cameras[left ? Left : Right];
+                if (!cam.has_value()) return;
+                if (dir) cam->bezel_x += 0.5; else cam->bezel_x -= 0.5;
+            };
+            auto adj_by = [&](bool dir, bool left) {
+                auto& cam = g::cfg.cameras[left ? Left : Right];
+                if (!cam.has_value()) return;
+                if (dir) cam->bezel_y += 0.5; else cam->bezel_y -= 0.5;
+            };
 
-            if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) {
+            if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow) || ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
+                bool dir = ImGui::IsKeyPressed(ImGuiKey_RightArrow);
                 switch (selected_row) {
-                    case 0:
-                        if (has_left)
-                            g::cfg.cameras[Left]->fov_adjustment -= 0.01;
-                        break;
-                    case 1:
-                        if (has_left)
-                            g::cfg.cameras[Left]->angle_adjustment -= 0.1;
-                        break;
-                    case 2:
-                        if (has_right)
-                            g::cfg.cameras[Right]->fov_adjustment -= 0.01;
-                        break;
-                    case 3:
-                        if (has_right)
-                            g::cfg.cameras[Right]->angle_adjustment -= 0.1;
-                        break;
+                    case 0: adj_bx(dir, true); break;
+                    case 1: adj_by(dir, true); break;
+                    case 2: adj_bx(dir, false); break;
+                    case 3: adj_by(dir, false); break;
                     case 4:
-                        g::cfg.horizon_adjustment.value() -= 0.001f;
-                        horizon_adjustment_changed = true;
+                        if (dir) g::cfg.EyeDistance += 1.0f; else g::cfg.EyeDistance -= 1.0f;
                         break;
                     case 5:
-                        toggle_side_monitor_setting(false);
-                        break;
-                    default:
-                        break;
-                }
-            }
-
-            if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
-                switch (selected_row) {
-                    case 0:
-                        if (has_left)
-                            g::cfg.cameras[Left]->fov_adjustment += 0.01;
-                        break;
-                    case 1:
-                        if (has_left)
-                            g::cfg.cameras[Left]->angle_adjustment += 0.1;
-                        break;
-                    case 2:
-                        if (has_right)
-                            g::cfg.cameras[Right]->fov_adjustment += 0.01;
-                        break;
-                    case 3:
-                        if (has_right)
-                            g::cfg.cameras[Right]->angle_adjustment += 0.1;
-                        break;
-                    case 4:
-                        g::cfg.horizon_adjustment.value() += 0.001f;
-                        horizon_adjustment_changed = true;
-                        break;
-                    case 5:
-                        toggle_side_monitor_setting(true);
+                        if (dir) g::cfg.MonitorWidth += 1.0f; else g::cfg.MonitorWidth -= 1.0f;
                         break;
                     case 6:
-                        update_config_files();
+                        if (dir) g::cfg.SideAngle += 0.5f; else g::cfg.SideAngle -= 0.5f;
+                        break;
+                    case 7:
+                        // Horizon adjustment is per-car; start from 0 if unset
+                        g::cfg.horizon_adjustment = g::cfg.horizon_adjustment.value_or(0.0f) + (dir ? 0.001f : -0.001f);
+                        horizon_adjustment_changed = true;
+                        break;
+                    case 8:
+                        toggle_side_monitor_setting(dir);
                         break;
                     default:
                         break;
                 }
             }
 
-            if (ImGui::IsKeyPressed(ImGuiKey_Enter) && selected_row == 6) {
+            if (ImGui::IsKeyPressed(ImGuiKey_Enter) && selected_row == 9) {
                 update_config_files();
             }
         }
@@ -191,15 +165,19 @@ namespace ui {
         {
             const bool disable = !g::cfg.cameras[Left].has_value();
             const ImGuiSelectableFlags flags = disable ? ImGuiSelectableFlags_Disabled : ImGuiSelectableFlags_None;
-            ImGui::Selectable(std::format("Fov adjustment left {:.3f}", disable ? 0.0 : g::cfg.cameras[Left]->fov_adjustment).c_str(), selected_row == row_count++, flags);
-            ImGui::Selectable(std::format("Bezel correction left {:.2f}", disable ? 0.0 : g::cfg.cameras[Left]->angle_adjustment).c_str(), selected_row == row_count++, flags);
+            ImGui::Selectable(std::format("Left bezel H {:.2f}", disable ? 0.0 : g::cfg.cameras[Left]->bezel_x).c_str(), selected_row == row_count++, flags);
+            ImGui::Selectable(std::format("Left bezel V {:.2f}", disable ? 0.0 : g::cfg.cameras[Left]->bezel_y).c_str(), selected_row == row_count++, flags);
         }
         {
             const bool disable = !g::cfg.cameras[Right].has_value();
             const ImGuiSelectableFlags flags = disable ? ImGuiSelectableFlags_Disabled : ImGuiSelectableFlags_None;
-            ImGui::Selectable(std::format("Fov adjustment right {:.3f}", disable ? 0.0 : g::cfg.cameras[Right]->fov_adjustment).c_str(), selected_row == row_count++, flags);
-            ImGui::Selectable(std::format("Bezel correction right {:.2f}", disable ? 0.0 : g::cfg.cameras[Right]->angle_adjustment).c_str(), selected_row == row_count++, flags);
+            ImGui::Selectable(std::format("Right bezel H {:.2f}", disable ? 0.0 : g::cfg.cameras[Right]->bezel_x).c_str(), selected_row == row_count++, flags);
+            ImGui::Selectable(std::format("Right bezel V {:.2f}", disable ? 0.0 : g::cfg.cameras[Right]->bezel_y).c_str(), selected_row == row_count++, flags);
         }
+
+        ImGui::Selectable(std::format("Eye distance {:.0f}", g::cfg.EyeDistance).c_str(), selected_row == row_count++);
+        ImGui::Selectable(std::format("Monitor width {:.0f}", g::cfg.MonitorWidth).c_str(), selected_row == row_count++);
+        ImGui::Selectable(std::format("Side angle {:.1f}", g::cfg.SideAngle).c_str(), selected_row == row_count++);
 
         ImGui::Selectable(std::format("Horizon adjustment (car and camera specific) {:.3f}", g::cfg.horizon_adjustment.value_or(0.0f)).c_str(), selected_row == row_count++);
         ImGui::Selectable(std::format("Run side monitors with half FPS: {}", g::cfg.side_monitors_half_hz ? (g::cfg.side_monitors_half_hz_btb_only ? "BTB only" : "ON") : "OFF").c_str(), selected_row == row_count++);

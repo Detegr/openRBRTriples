@@ -133,8 +133,10 @@ namespace rbr {
         }
     }
 
-    // Read camera FoV from the currently selected RBR camera
-    // and recreate the projection matrix with the correct FoV
+    // Read camera FoV from the currently selected RBR camera.
+    // The projection matrix itself is built per-frame in FlatTriples.cpp from
+    // physical monitor geometry (MonitorWidth/EyeDistance/SideAngle), so the
+    // FoV read here is only used to widen the game's own culling frustum.
     float* update_current_camera_fov(uintptr_t p)
     {
         float* original_fov_ptr;
@@ -166,49 +168,11 @@ namespace rbr {
 
         float original_fov_ptr_value = *original_fov_ptr;
 
-        // This has to be done to make the FoV value correct for glm::perspectiveFovLH
-        // It is always 4/3 even if the current resolution has a different aspect ratio
-        float original_fov = *original_fov_ptr / (4.0f / 3.0f);
-        float fov = glm::radians(original_fov);
-
         // Z-near at 0 breaks Z-buffer (and does not make sense anyway), so force it non-zero
         *z_near_ptr = std::max(0.01f, *z_near_ptr);
 
-        if (g::game_mode == GameMode::MainMenu) [[unlikely]] {
-            // Fix the main menu FoV to make it look good
-            fov = 0.4f;
-        }
-
-        // Re-calculate the correct angle for the new FoV for the side views
-        for (size_t i = 0; i < g::cfg.cameras.size(); ++i) {
-            if (!g::cfg.cameras[i].has_value()) {
-                continue;
-            }
-
-            const auto znear = *z_near_ptr;
-            const auto aspect = static_cast<float>(g::cfg.cameras[Primary]->w()) / static_cast<float>(g::cfg.cameras[Primary]->h());
-
-            const float top = glm::tan(0.5f * fov) * znear;
-            const float bottom = -top;
-            const float half_width = top * aspect;
-            const float width = half_width * 2;
-            float right = half_width;
-            float left = -half_width;
-
-            if (i == RenderTarget::Right) {
-                left += static_cast<float>(g::cfg.cameras[i]->fov_adjustment) * width;
-            }
-            if (i == RenderTarget::Left) {
-                right += static_cast<float>(g::cfg.cameras[i]->fov_adjustment) * width;
-            }
-
-            const auto yoffs = znear * (g::cfg.horizon_adjustment.value_or(0.0f) + static_cast<float>(g::cfg.cameras[i]->horizon_adjustment));
-            g::projection_matrix[i] = glm::frustumLH_ZO(left, right, bottom + yoffs, top + yoffs, znear, 10000.0f);
-
-            if (i != RenderTarget::Primary) {
-                g::calculated_screen_angle[i] = 2.0f * std::atan(std::tan(fov / 2.0f) * aspect);
-            }
-        }
+        // Cache znear for per-frame Flat projection rebuild (FlatTriples.cpp)
+        g::flat_znear = *z_near_ptr;
 
         const auto mode = rbr::get_game_mode();
         // On BTB stages the FoV does not matter as the object culling effect is not in use
@@ -334,12 +298,23 @@ namespace rbr {
             return;
         }
 
+        // Mark all projections dirty at start of each frame so they get rebuilt
+        // with the current config (bezel/horizon adjustments apply immediately)
+        for (auto& d : g::projection_dirty) d = true;
+
         static RenderTarget render_target_to_skip = RenderTarget::Left;
 
         g::is_rendering = true;
 
         for (const auto& [i, c] : std::views::enumerate(g::cfg.cameras)) {
             if (!c.has_value()) {
+                continue;
+            }
+
+            // In the menu only the primary screen is rendered: rendering the
+            // side screens triples the draw call cost and drops the menu to
+            // ~11 FPS on some map selection screens.
+            if (g::game_mode == GameMode::MainMenu && i != RenderTarget::Primary) {
                 continue;
             }
 
